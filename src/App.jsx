@@ -213,7 +213,7 @@ export default function App() {
   const dismissAlert = (id) => setAlerts(prev => prev.filter(a => a.id !== id));
   const saveProfile = () => { setProfile(editProfile); setShowProfileModal(false); };
 
-  const tabs = ["dashboard", "invoices", "expenses", "alerts"];
+  const tabs = ["dashboard", "invoices", "expenses", "alerts", "charts"];
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.bg, minHeight: "100vh", color: COLORS.text }}>
@@ -236,7 +236,7 @@ export default function App() {
               <button key={t} onClick={() => setTab(t)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
                 background: tab === t ? COLORS.accentDim : "transparent", color: tab === t ? COLORS.accent : COLORS.textDim,
                 fontSize: 14, fontWeight: tab === t ? 600 : 400, marginBottom: 4, textAlign: "left", fontFamily: "'DM Sans', sans-serif" }}>
-                <span>{t === "dashboard" ? "◼" : t === "invoices" ? "◈" : t === "expenses" ? "◉" : "◐"}</span>
+                <span>{t === "dashboard" ? "◼" : t === "invoices" ? "◈" : t === "expenses" ? "◉" : t === "alerts" ? "◐" : "◫"}</span>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
                 {t === "alerts" && upcomingAlerts.length > 0 && (
                   <span style={{ marginLeft: "auto", background: COLORS.warning, color: "#000", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10 }}>{upcomingAlerts.length}</span>
@@ -459,11 +459,177 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* CHARTS */}
+          {tab === "charts" && (() => {
+            // Build last 6 months of data
+            const months = Array.from({ length: 6 }, (_, i) => {
+              const d = new Date();
+              d.setMonth(d.getMonth() - (5 - i));
+              return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
+            });
+
+            const monthlyIncome = months.map(m =>
+              invoices.filter(inv => inv.status === "paid" && inv.dueDate?.startsWith(m.key)).reduce((s, i) => s + i.amount, 0)
+            );
+            const monthlyExpenses = months.map(m =>
+              expenses.filter(e => e.date?.startsWith(m.key)).reduce((s, e) => s + e.amount, 0)
+            );
+            const monthlyProfit = months.map((_, i) => monthlyIncome[i] - monthlyExpenses[i]);
+
+            const maxBar = Math.max(...monthlyIncome, ...monthlyExpenses, 1);
+            const chartH = 180;
+            const barW = 28;
+            const gap = 16;
+            const groupW = barW * 2 + gap;
+            const totalW = months.length * (groupW + 24);
+
+            // Expense category pie data
+            const catData = Object.entries(expenseByCategory).sort((a, b) => b[1] - a[1]);
+            const total = catData.reduce((s, [, v]) => s + v, 0);
+            const PIE_COLORS = ["#4ADE80", "#60A5FA", "#FBBF24", "#F87171", "#C084FC", "#34D399"];
+
+            // Simple arc path
+            const polarToCartesian = (cx, cy, r, deg) => {
+              const rad = (deg - 90) * Math.PI / 180;
+              return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+            };
+            const arcPath = (cx, cy, r, startDeg, endDeg) => {
+              const s = polarToCartesian(cx, cy, r, startDeg);
+              const e = polarToCartesian(cx, cy, r, endDeg);
+              const large = endDeg - startDeg > 180 ? 1 : 0;
+              return `M ${cx} ${cy} L ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y} Z`;
+            };
+
+            let cursor = 0;
+            const slices = catData.map(([cat, amt], i) => {
+              const pct = amt / total;
+              const start = cursor * 360;
+              cursor += pct;
+              const end = cursor * 360;
+              return { cat, amt, pct, start, end, color: PIE_COLORS[i % PIE_COLORS.length] };
+            });
+
+            return (
+              <div>
+                <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 6px", color: COLORS.text }}>Trends & Insights</h1>
+                <p style={{ color: COLORS.muted, fontSize: 14, marginBottom: 32 }}>Last 6 months at a glance.</p>
+
+                {/* Bar chart — income vs expenses */}
+                <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 28, marginBottom: 24 }}>
+                  <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Income vs Expenses</h3>
+                  <p style={{ color: COLORS.muted, fontSize: 12, margin: "0 0 24px" }}>Monthly comparison · paid invoices vs logged expenses</p>
+                  <div style={{ overflowX: "auto" }}>
+                    <svg width={totalW} height={chartH + 50} style={{ display: "block" }}>
+                      {/* Grid lines */}
+                      {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+                        const y = chartH - pct * chartH;
+                        return (
+                          <g key={i}>
+                            <line x1={0} y1={y} x2={totalW} y2={y} stroke={COLORS.border} strokeWidth={1} />
+                            <text x={0} y={y - 4} fontSize={10} fill={COLORS.muted}>{formatCurrency(pct * maxBar)}</text>
+                          </g>
+                        );
+                      })}
+                      {/* Bars */}
+                      {months.map((m, i) => {
+                        const x = i * (groupW + 24) + 48;
+                        const incH = (monthlyIncome[i] / maxBar) * chartH;
+                        const expH = (monthlyExpenses[i] / maxBar) * chartH;
+                        return (
+                          <g key={m.key}>
+                            {/* Income bar */}
+                            <rect x={x} y={chartH - incH} width={barW} height={incH} fill={COLORS.accent} rx={4} opacity={0.9} />
+                            {/* Expense bar */}
+                            <rect x={x + barW + 4} y={chartH - expH} width={barW} height={expH} fill={COLORS.danger} rx={4} opacity={0.8} />
+                            {/* Label */}
+                            <text x={x + barW} y={chartH + 18} textAnchor="middle" fontSize={11} fill={COLORS.muted}>{m.label}</text>
+                          </g>
+                        );
+                      })}
+                      {/* Net profit line */}
+                      {months.length > 1 && (
+                        <polyline
+                          points={months.map((_, i) => {
+                            const x = i * (groupW + 24) + 48 + barW;
+                            const profit = monthlyProfit[i];
+                            const y = chartH - (Math.max(0, profit) / maxBar) * chartH;
+                            return `${x},${y}`;
+                          }).join(" ")}
+                          fill="none" stroke={COLORS.warning} strokeWidth={2} strokeDasharray="4 2"
+                        />
+                      )}
+                    </svg>
+                  </div>
+                  {/* Legend */}
+                  <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
+                    {[{ color: COLORS.accent, label: "Income" }, { color: COLORS.danger, label: "Expenses" }, { color: COLORS.warning, label: "Net profit (dashed)" }].map(l => (
+                      <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: 2, background: l.color }} />
+                        <span style={{ fontSize: 12, color: COLORS.muted }}>{l.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Monthly summary table + pie chart */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                  {/* Monthly table */}
+                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
+                    <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Monthly Summary</h3>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 0 }}>
+                      {["Month", "Income", "Expenses", "Net"].map(h => (
+                        <div key={h} style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.06em", paddingBottom: 10, borderBottom: `1px solid ${COLORS.border}` }}>{h}</div>
+                      ))}
+                      {months.map((m, i) => {
+                        const profit = monthlyProfit[i];
+                        return [
+                          <div key={`${m.key}-l`} style={{ fontSize: 13, color: COLORS.textDim, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}` }}>{m.label}</div>,
+                          <div key={`${m.key}-i`} style={{ fontSize: 13, color: COLORS.accent, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600 }}>{monthlyIncome[i] > 0 ? formatCurrency(monthlyIncome[i]) : "—"}</div>,
+                          <div key={`${m.key}-e`} style={{ fontSize: 13, color: COLORS.danger, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600 }}>{monthlyExpenses[i] > 0 ? formatCurrency(monthlyExpenses[i]) : "—"}</div>,
+                          <div key={`${m.key}-p`} style={{ fontSize: 13, color: profit >= 0 ? COLORS.accent : COLORS.danger, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 700 }}>{formatCurrency(profit)}</div>,
+                        ];
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Pie chart — expense categories */}
+                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
+                    <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Expense Breakdown</h3>
+                    {total === 0 ? (
+                      <p style={{ color: COLORS.muted, fontSize: 13 }}>No expenses logged yet.</p>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+                        <svg width={140} height={140} style={{ flexShrink: 0 }}>
+                          {slices.map((sl, i) => (
+                            <path key={i} d={arcPath(70, 70, 60, sl.start, sl.end)} fill={sl.color} stroke={COLORS.card} strokeWidth={2} />
+                          ))}
+                          <circle cx={70} cy={70} r={32} fill={COLORS.card} />
+                          <text x={70} y={68} textAnchor="middle" fontSize={11} fill={COLORS.muted}>Total</text>
+                          <text x={70} y={82} textAnchor="middle" fontSize={12} fill={COLORS.text} fontWeight="bold">{formatCurrency(total)}</text>
+                        </svg>
+                        <div style={{ flex: 1 }}>
+                          {slices.map((sl, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                              <div style={{ width: 10, height: 10, borderRadius: 2, background: sl.color, flexShrink: 0 }} />
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, color: COLORS.text, fontWeight: 500 }}>{sl.cat}</div>
+                                <div style={{ fontSize: 11, color: COLORS.muted }}>{Math.round(sl.pct * 100)}% · {formatCurrency(sl.amt)}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
       {/* Modals */}
-      {showInvoiceModal && (
         <Modal title="New Invoice" onClose={() => setShowInvoiceModal(false)}>
           <Input label="Client Name" value={newInvoice.client} onChange={e => setNewInvoice({ ...newInvoice, client: e.target.value })} placeholder="e.g. Acme Corp" />
           <Input label="Amount ($)" type="number" value={newInvoice.amount} onChange={e => setNewInvoice({ ...newInvoice, amount: e.target.value })} placeholder="0.00" />
