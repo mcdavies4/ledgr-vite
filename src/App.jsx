@@ -1,29 +1,16 @@
 import { useState, useEffect } from "react";
 
 const COLORS = {
-  bg: "#0D0F14",
-  surface: "#161921",
-  card: "#1C2030",
-  border: "#252A3A",
-  accent: "#4ADE80",
-  accentDim: "#1a3d2b",
-  warning: "#FBBF24",
-  danger: "#F87171",
-  muted: "#6B7280",
-  text: "#F1F5F9",
-  textDim: "#94A3B8",
+  bg: "#0D0F14", surface: "#161921", card: "#1C2030", border: "#252A3A",
+  accent: "#4ADE80", accentDim: "#1a3d2b", warning: "#FBBF24",
+  danger: "#F87171", muted: "#6B7280", text: "#F1F5F9", textDim: "#94A3B8",
 };
 
 const formatCurrency = (n) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-
 const formatDate = (d) =>
   new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-const daysUntil = (d) => {
-  const diff = new Date(d) - new Date();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-};
+const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / (1000 * 60 * 60 * 24));
 
 const INITIAL_INVOICES = [
   { id: 1, client: "Acme Corp", amount: 3200, status: "paid", dueDate: "2025-02-10", type: "business", description: "Web redesign Q1" },
@@ -31,7 +18,6 @@ const INITIAL_INVOICES = [
   { id: 3, client: "NovaTech", amount: 4800, status: "overdue", dueDate: "2026-02-20", type: "business", description: "App development sprint" },
   { id: 4, client: "Freelance Guild", amount: 750, status: "pending", dueDate: "2026-03-20", type: "business", description: "Workshop facilitation" },
 ];
-
 const INITIAL_EXPENSES = [
   { id: 1, name: "Adobe Creative Cloud", amount: 54.99, category: "Software", date: "2026-02-28", type: "business" },
   { id: 2, name: "Groceries", amount: 180.5, category: "Personal", date: "2026-03-01", type: "personal" },
@@ -40,21 +26,23 @@ const INITIAL_EXPENSES = [
   { id: 5, name: "Client lunch", amount: 67, category: "Meals", date: "2026-03-01", type: "business" },
   { id: 6, name: "Gym membership", amount: 40, category: "Health", date: "2026-03-01", type: "personal" },
 ];
-
 const INITIAL_ALERTS = [
   { id: 1, label: "Rent due", amount: 1850, dueDate: "2026-03-05", type: "personal" },
   { id: 2, label: "Notion subscription", amount: 16, dueDate: "2026-03-08", type: "business" },
   { id: 3, label: "Tax estimated payment", amount: 1200, dueDate: "2026-04-15", type: "business" },
 ];
+const DEFAULT_PROFILE = { name: "Your Name", email: "you@email.com", address: "Your City, State", phone: "" };
+
+const load = (key, fallback) => {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+};
+const save = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
 
 const Badge = ({ type }) => (
-  <span style={{
-    fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-    padding: "2px 7px", borderRadius: 4,
+  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 4,
     background: type === "business" ? "#1e2d4a" : "#2a1e3a",
-    color: type === "business" ? "#60A5FA" : "#C084FC",
-    textTransform: "uppercase",
-  }}>{type}</span>
+    color: type === "business" ? "#60A5FA" : "#C084FC", textTransform: "uppercase" }}>{type}</span>
 );
 
 const StatusPill = ({ status }) => {
@@ -64,23 +52,12 @@ const StatusPill = ({ status }) => {
     overdue: { bg: "#3a1a1a", color: "#F87171", label: "Overdue" },
   };
   const s = map[status];
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: s.bg, color: s.color }}>
-      {s.label}
-    </span>
-  );
+  return <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: s.bg, color: s.color }}>{s.label}</span>;
 };
 
-const Modal = ({ title, onClose, children }) => (
-  <div style={{
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-    display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100
-  }}>
-    <div style={{
-      background: COLORS.card, border: `1px solid ${COLORS.border}`,
-      borderRadius: 16, padding: 32, width: 420, maxWidth: "90vw",
-      boxShadow: "0 25px 60px rgba(0,0,0,0.5)"
-    }}>
+const Modal = ({ title, onClose, children, wide }) => (
+  <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: 32, width: wide ? 520 : 420, maxWidth: "90vw", boxShadow: "0 25px 60px rgba(0,0,0,0.5)", maxHeight: "90vh", overflowY: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h3 style={{ color: COLORS.text, fontSize: 18, fontFamily: "'Playfair Display', serif", margin: 0 }}>{title}</h3>
         <button onClick={onClose} style={{ background: "none", border: "none", color: COLORS.muted, cursor: "pointer", fontSize: 20 }}>✕</button>
@@ -93,45 +70,92 @@ const Modal = ({ title, onClose, children }) => (
 const Input = ({ label, ...props }) => (
   <div style={{ marginBottom: 16 }}>
     <label style={{ display: "block", color: COLORS.textDim, fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
-    <input {...props} style={{
-      width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`,
-      borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14,
-      outline: "none", boxSizing: "border-box",
-      fontFamily: "'DM Sans', sans-serif",
-    }} />
+    <input {...props} style={{ width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" }} />
   </div>
 );
 
 const Select = ({ label, children, ...props }) => (
   <div style={{ marginBottom: 16 }}>
     <label style={{ display: "block", color: COLORS.textDim, fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
-    <select {...props} style={{
-      width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`,
-      borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14,
-      outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif",
-    }}>{children}</select>
+    <select {...props} style={{ width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" }}>{children}</select>
   </div>
 );
 
-const Btn = ({ children, onClick, variant = "primary", style = {} }) => (
-  <button onClick={onClick} style={{
-    padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-    cursor: "pointer", border: "none", fontFamily: "'DM Sans', sans-serif",
+const Btn = ({ children, onClick, variant = "primary", style: s = {} }) => (
+  <button onClick={onClick} style={{ padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", border: "none", fontFamily: "'DM Sans', sans-serif",
     background: variant === "primary" ? COLORS.accent : COLORS.border,
-    color: variant === "primary" ? "#0D0F14" : COLORS.textDim,
-    ...style
-  }}>{children}</button>
+    color: variant === "primary" ? "#0D0F14" : COLORS.textDim, ...s }}>{children}</button>
 );
 
-// localStorage helpers
-const load = (key, fallback) => {
-  try {
-    const val = localStorage.getItem(key);
-    return val ? JSON.parse(val) : fallback;
-  } catch { return fallback; }
-};
-const save = (key, val) => {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+const generatePDF = (inv, profile) => {
+  const invoiceNum = `INV-${String(inv.id).slice(-5).padStart(5, "0")}`;
+  const fmt = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—";
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <title>Invoice ${invoiceNum}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',sans-serif;background:#fff;color:#111827;padding:64px;max-width:820px;margin:0 auto;line-height:1.5}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px}
+    .logo{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;color:#111827}
+    .logo span{color:#16a34a}
+    .inv-meta{text-align:right}
+    .inv-meta h2{font-size:26px;font-weight:700;margin-bottom:4px}
+    .inv-meta .num{font-size:13px;color:#6B7280;letter-spacing:0.04em}
+    .stripe{height:3px;background:linear-gradient(90deg,#16a34a,#4ade80);border-radius:2px;margin-bottom:44px}
+    .parties{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-bottom:44px}
+    .plabel{font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin-bottom:8px}
+    .pname{font-size:17px;font-weight:700;color:#111827;margin-bottom:4px}
+    .pdetail{font-size:13px;color:#4B5563;line-height:1.7}
+    .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:22px;margin-bottom:44px}
+    .ml{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#9CA3AF;margin-bottom:5px}
+    .mv{font-size:14px;font-weight:600;color:#111827}
+    .paid{color:#16a34a}.pending{color:#d97706}.overdue{color:#dc2626}
+    table{width:100%;border-collapse:collapse;margin-bottom:32px}
+    thead tr{border-bottom:2px solid #111827}
+    th{text-align:left;padding:0 0 12px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6B7280}
+    th:last-child{text-align:right}
+    td{padding:18px 0;border-bottom:1px solid #F3F4F6;font-size:14px;color:#111827;vertical-align:top}
+    td:last-child{text-align:right;font-weight:700;font-size:15px}
+    .total-section{display:flex;justify-content:flex-end;margin-bottom:48px}
+    .total-box{background:#111827;color:#fff;padding:24px 36px;border-radius:14px;min-width:240px}
+    .tlabel{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:6px}
+    .tamount{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:#4ade80}
+    .footer{text-align:center;padding-top:28px;border-top:1px solid #E5E7EB;font-size:12px;color:#9CA3AF;line-height:1.8}
+    .print-btn{position:fixed;bottom:28px;right:28px;background:#16a34a;color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 4px 20px rgba(22,163,74,0.35)}
+    @media print{.print-btn{display:none}body{padding:40px}}
+  </style></head><body>
+  <button class="print-btn" onclick="window.print()">⬇ Save as PDF</button>
+  <div class="top">
+    <div class="logo">Ledgr<span>.</span></div>
+    <div class="inv-meta"><h2>Invoice</h2><div class="num">${invoiceNum}</div></div>
+  </div>
+  <div class="stripe"></div>
+  <div class="parties">
+    <div><div class="plabel">From</div><div class="pname">${profile.name}</div>
+    <div class="pdetail">${profile.email}${profile.phone ? "<br/>" + profile.phone : ""}${profile.address ? "<br/>" + profile.address : ""}</div></div>
+    <div><div class="plabel">Bill To</div><div class="pname">${inv.client}</div></div>
+  </div>
+  <div class="meta-grid">
+    <div><div class="ml">Invoice Date</div><div class="mv">${fmtD(new Date().toISOString())}</div></div>
+    <div><div class="ml">Due Date</div><div class="mv">${fmtD(inv.dueDate)}</div></div>
+    <div><div class="ml">Status</div><div class="mv ${inv.status}">${inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}</div></div>
+  </div>
+  <table>
+    <thead><tr><th style="width:60%">Description</th><th>Category</th><th>Amount</th></tr></thead>
+    <tbody><tr>
+      <td>${inv.description || "Services rendered"}</td>
+      <td style="color:#6B7280;font-size:13px">${inv.type.charAt(0).toUpperCase() + inv.type.slice(1)}</td>
+      <td>${fmt(inv.amount)}</td>
+    </tr></tbody>
+  </table>
+  <div class="total-section"><div class="total-box"><div class="tlabel">Total Due</div><div class="tamount">${fmt(inv.amount)}</div></div></div>
+  <div class="footer">Thank you for your business.${profile.email ? "<br/>" + profile.email : ""}<br/>Generated by Ledgr</div>
+</body></html>`;
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
 };
 
 export default function App() {
@@ -139,33 +163,31 @@ export default function App() {
   const [invoices, setInvoices] = useState(() => load("ledgr_invoices", INITIAL_INVOICES));
   const [expenses, setExpenses] = useState(() => load("ledgr_expenses", INITIAL_EXPENSES));
   const [alerts, setAlerts] = useState(() => load("ledgr_alerts", INITIAL_ALERTS));
+  const [profile, setProfile] = useState(() => load("ledgr_profile", DEFAULT_PROFILE));
   const [filterType, setFilterType] = useState("all");
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [newInvoice, setNewInvoice] = useState({ client: "", amount: "", dueDate: "", type: "business", description: "", status: "pending" });
   const [newExpense, setNewExpense] = useState({ name: "", amount: "", category: "", date: "", type: "business" });
   const [newAlert, setNewAlert] = useState({ label: "", amount: "", dueDate: "", type: "personal" });
+  const [editProfile, setEditProfile] = useState(profile);
 
-  // Auto-save whenever data changes
   useEffect(() => save("ledgr_invoices", invoices), [invoices]);
   useEffect(() => save("ledgr_expenses", expenses), [expenses]);
   useEffect(() => save("ledgr_alerts", alerts), [alerts]);
+  useEffect(() => save("ledgr_profile", profile), [profile]);
 
-  // Metrics
   const totalIncome = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
   const totalPending = invoices.filter(i => i.status === "pending").reduce((s, i) => s + i.amount, 0);
   const totalOverdue = invoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
   const netProfit = totalIncome - expenses.filter(e => e.type === "business").reduce((s, e) => s + e.amount, 0);
-
   const filteredInvoices = filterType === "all" ? invoices : invoices.filter(i => i.type === filterType);
   const filteredExpenses = filterType === "all" ? expenses : expenses.filter(e => e.type === filterType);
-
-  const upcomingAlerts = alerts
-    .map(a => ({ ...a, days: daysUntil(a.dueDate) }))
-    .filter(a => a.days <= 30)
-    .sort((a, b) => a.days - b.days);
+  const upcomingAlerts = alerts.map(a => ({ ...a, days: daysUntil(a.dueDate) })).filter(a => a.days <= 30).sort((a, b) => a.days - b.days);
+  const expenseByCategory = expenses.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + e.amount; return acc; }, {});
 
   const addInvoice = () => {
     if (!newInvoice.client || !newInvoice.amount) return;
@@ -173,44 +195,33 @@ export default function App() {
     setNewInvoice({ client: "", amount: "", dueDate: "", type: "business", description: "", status: "pending" });
     setShowInvoiceModal(false);
   };
-
   const addExpense = () => {
     if (!newExpense.name || !newExpense.amount) return;
     setExpenses(prev => [...prev, { ...newExpense, id: Date.now(), amount: parseFloat(newExpense.amount) }]);
     setNewExpense({ name: "", amount: "", category: "", date: "", type: "business" });
     setShowExpenseModal(false);
   };
-
   const addAlert = () => {
     if (!newAlert.label || !newAlert.dueDate) return;
     setAlerts(prev => [...prev, { ...newAlert, id: Date.now(), amount: parseFloat(newAlert.amount) || 0 }]);
     setNewAlert({ label: "", amount: "", dueDate: "", type: "personal" });
     setShowAlertModal(false);
   };
-
   const markInvoicePaid = (id) => setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: "paid" } : i));
   const deleteInvoice = (id) => setInvoices(prev => prev.filter(i => i.id !== id));
   const deleteExpense = (id) => setExpenses(prev => prev.filter(e => e.id !== id));
   const dismissAlert = (id) => setAlerts(prev => prev.filter(a => a.id !== id));
-
-  const expenseByCategory = expenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + e.amount;
-    return acc;
-  }, {});
+  const saveProfile = () => { setProfile(editProfile); setShowProfileModal(false); };
 
   const tabs = ["dashboard", "invoices", "expenses", "alerts"];
 
   return (
     <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.bg, minHeight: "100vh", color: COLORS.text }}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-
-      {/* Sidebar */}
       <div style={{ display: "flex", minHeight: "100vh" }}>
-        <div style={{
-          width: 220, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`,
-          padding: "28px 16px", display: "flex", flexDirection: "column", flexShrink: 0,
-          position: "sticky", top: 0, height: "100vh"
-        }}>
+
+        {/* Sidebar */}
+        <div style={{ width: 220, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`, padding: "28px 16px", display: "flex", flexDirection: "column", flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
           <div style={{ marginBottom: 36 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <div style={{ width: 32, height: 32, background: COLORS.accent, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -220,60 +231,35 @@ export default function App() {
             </div>
             <p style={{ color: COLORS.muted, fontSize: 11, margin: 0, paddingLeft: 42 }}>Personal & Business</p>
           </div>
-
           <nav style={{ flex: 1 }}>
             {tabs.map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{
-                display: "flex", alignItems: "center", gap: 10, width: "100%",
-                padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: tab === t ? COLORS.accentDim : "transparent",
-                color: tab === t ? COLORS.accent : COLORS.textDim,
-                fontSize: 14, fontWeight: tab === t ? 600 : 400,
-                marginBottom: 4, textAlign: "left", fontFamily: "'DM Sans', sans-serif",
-                transition: "all 0.15s",
-              }}>
+              <button key={t} onClick={() => setTab(t)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                background: tab === t ? COLORS.accentDim : "transparent", color: tab === t ? COLORS.accent : COLORS.textDim,
+                fontSize: 14, fontWeight: tab === t ? 600 : 400, marginBottom: 4, textAlign: "left", fontFamily: "'DM Sans', sans-serif" }}>
                 <span>{t === "dashboard" ? "◼" : t === "invoices" ? "◈" : t === "expenses" ? "◉" : "◐"}</span>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
                 {t === "alerts" && upcomingAlerts.length > 0 && (
-                  <span style={{ marginLeft: "auto", background: COLORS.warning, color: "#000", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10 }}>
-                    {upcomingAlerts.length}
-                  </span>
+                  <span style={{ marginLeft: "auto", background: COLORS.warning, color: "#000", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10 }}>{upcomingAlerts.length}</span>
                 )}
               </button>
             ))}
           </nav>
-
-          {/* Type filter */}
           <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, marginTop: 16 }}>
             <p style={{ color: COLORS.muted, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>View</p>
             {["all", "business", "personal"].map(f => (
-              <button key={f} onClick={() => setFilterType(f)} style={{
-                display: "block", width: "100%", padding: "7px 12px", borderRadius: 6,
-                border: "none", cursor: "pointer", textAlign: "left",
-                background: filterType === f ? COLORS.border : "transparent",
-                color: filterType === f ? COLORS.text : COLORS.muted,
-                fontSize: 13, fontFamily: "'DM Sans', sans-serif",
-                marginBottom: 2,
-              }}>
+              <button key={f} onClick={() => setFilterType(f)} style={{ display: "block", width: "100%", padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", textAlign: "left",
+                background: filterType === f ? COLORS.border : "transparent", color: filterType === f ? COLORS.text : COLORS.muted, fontSize: 13, fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>
                 {f === "all" ? "All finances" : f === "business" ? "💼 Business" : "🏠 Personal"}
               </button>
             ))}
           </div>
-
-          {/* Reset */}
           <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, marginTop: 16 }}>
-            <button onClick={() => {
-              if (window.confirm("Reset all data to demo? This cannot be undone.")) {
-                setInvoices(INITIAL_INVOICES);
-                setExpenses(INITIAL_EXPENSES);
-                setAlerts(INITIAL_ALERTS);
-              }
-            }} style={{
-              display: "block", width: "100%", padding: "7px 12px", borderRadius: 6,
-              border: "none", cursor: "pointer", textAlign: "left",
-              background: "transparent", color: COLORS.muted,
-              fontSize: 12, fontFamily: "'DM Sans', sans-serif",
-            }}>
+            <button onClick={() => { setEditProfile(profile); setShowProfileModal(true); }}
+              style={{ display: "block", width: "100%", padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", textAlign: "left", background: "transparent", color: COLORS.textDim, fontSize: 13, fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>
+              👤 My Profile
+            </button>
+            <button onClick={() => { if (window.confirm("Reset all data to demo?")) { setInvoices(INITIAL_INVOICES); setExpenses(INITIAL_EXPENSES); setAlerts(INITIAL_ALERTS); } }}
+              style={{ display: "block", width: "100%", padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", textAlign: "left", background: "transparent", color: COLORS.muted, fontSize: 12, fontFamily: "'DM Sans', sans-serif" }}>
               ↺ Reset demo data
             </button>
           </div>
@@ -287,8 +273,6 @@ export default function App() {
             <div>
               <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 6px", color: COLORS.text }}>Financial Overview</h1>
               <p style={{ color: COLORS.muted, fontSize: 14, marginBottom: 32 }}>Your money, all in one place.</p>
-
-              {/* Stat cards */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
                 {[
                   { label: "Income Collected", value: formatCurrency(totalIncome), color: COLORS.accent, icon: "↑" },
@@ -297,7 +281,7 @@ export default function App() {
                   { label: "Total Expenses", value: formatCurrency(totalExpenses), color: "#60A5FA", icon: "↓" },
                   { label: "Net Profit", value: formatCurrency(netProfit), color: netProfit >= 0 ? COLORS.accent : COLORS.danger, icon: "≈" },
                 ].map((s, i) => (
-                  <div key={i} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "20px 20px" }}>
+                  <div key={i} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 20 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <span style={{ color: COLORS.muted, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.label}</span>
                       <span style={{ color: s.color, fontSize: 16 }}>{s.icon}</span>
@@ -306,8 +290,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
-              {/* Recent invoices + Alerts side by side */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
                 <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
                   <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Recent Invoices</h3>
@@ -324,7 +306,6 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-
                 <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
                   <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Upcoming Payments</h3>
                   {upcomingAlerts.length === 0 && <p style={{ color: COLORS.muted, fontSize: 13 }}>No upcoming payments in 30 days.</p>}
@@ -344,8 +325,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-
-              {/* Expense breakdown */}
               <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24, marginTop: 24 }}>
                 <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Spending by Category</h3>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
@@ -371,14 +350,20 @@ export default function App() {
           {/* INVOICES */}
           {tab === "invoices" && (
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                 <div>
                   <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 4px" }}>Invoices</h1>
                   <p style={{ color: COLORS.muted, fontSize: 14, margin: 0 }}>{filteredInvoices.length} invoices · {formatCurrency(filteredInvoices.reduce((s, i) => s + i.amount, 0))} total</p>
                 </div>
                 <Btn onClick={() => setShowInvoiceModal(true)}>+ New Invoice</Btn>
               </div>
-
+              {profile.name === "Your Name" && (
+                <div style={{ background: "#2a1e0a", border: `1px solid ${COLORS.warning}55`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ color: COLORS.warning }}>⚠</span>
+                  <span style={{ fontSize: 13, color: COLORS.warning }}>Set up your profile so your name appears correctly on PDF invoices.</span>
+                  <button onClick={() => { setEditProfile(profile); setShowProfileModal(true); }} style={{ marginLeft: "auto", background: COLORS.warning, color: "#000", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>Set up →</button>
+                </div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {filteredInvoices.map(inv => (
                   <div key={inv.id} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "18px 22px", display: "flex", alignItems: "center", gap: 16 }}>
@@ -390,14 +375,13 @@ export default function App() {
                       </div>
                       <div style={{ fontSize: 13, color: COLORS.muted }}>{inv.description} · Due {formatDate(inv.dueDate)}</div>
                     </div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.text, minWidth: 100, textAlign: "right" }}>
-                      {formatCurrency(inv.amount)}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.text, minWidth: 100, textAlign: "right" }}>{formatCurrency(inv.amount)}</div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <Btn onClick={() => generatePDF(inv, profile)} variant="secondary" s={{ padding: "7px 14px", fontSize: 12, color: COLORS.accent }}>🧾 PDF</Btn>
                       {inv.status !== "paid" && (
-                        <Btn onClick={() => markInvoicePaid(inv.id)} style={{ padding: "7px 14px", fontSize: 12 }}>Mark Paid</Btn>
+                        <Btn onClick={() => markInvoicePaid(inv.id)} s={{ padding: "7px 14px", fontSize: 12 }}>Mark Paid</Btn>
                       )}
-                      <Btn onClick={() => deleteInvoice(inv.id)} variant="secondary" style={{ padding: "7px 12px", fontSize: 12, color: COLORS.danger }}>✕</Btn>
+                      <Btn onClick={() => deleteInvoice(inv.id)} variant="secondary" s={{ padding: "7px 12px", fontSize: 12, color: COLORS.danger }}>✕</Btn>
                     </div>
                   </div>
                 ))}
@@ -415,9 +399,8 @@ export default function App() {
                 </div>
                 <Btn onClick={() => setShowExpenseModal(true)}>+ Add Expense</Btn>
               </div>
-
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {filteredExpenses.sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => (
+                {[...filteredExpenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => (
                   <div key={exp.id} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
@@ -427,7 +410,7 @@ export default function App() {
                       <div style={{ fontSize: 12, color: COLORS.muted }}>{exp.category} · {formatDate(exp.date)}</div>
                     </div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.danger }}>{formatCurrency(exp.amount)}</div>
-                    <Btn onClick={() => deleteExpense(exp.id)} variant="secondary" style={{ padding: "6px 10px", fontSize: 12, color: COLORS.muted }}>✕</Btn>
+                    <Btn onClick={() => deleteExpense(exp.id)} variant="secondary" s={{ padding: "6px 10px", fontSize: 12, color: COLORS.muted }}>✕</Btn>
                   </div>
                 ))}
               </div>
@@ -444,19 +427,14 @@ export default function App() {
                 </div>
                 <Btn onClick={() => setShowAlertModal(true)}>+ Add Alert</Btn>
               </div>
-
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {alerts.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).map(a => {
+                {[...alerts].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).map(a => {
                   const days = daysUntil(a.dueDate);
                   const urgency = days <= 3 ? COLORS.danger : days <= 7 ? COLORS.warning : COLORS.textDim;
                   return (
-                    <div key={a.id} style={{
-                      background: COLORS.card, borderRadius: 12, padding: "18px 22px",
-                      border: `1px solid ${days <= 7 ? urgency + "44" : COLORS.border}`,
-                      display: "flex", alignItems: "center", gap: 16
-                    }}>
+                    <div key={a.id} style={{ background: COLORS.card, borderRadius: 12, padding: "18px 22px", border: `1px solid ${days <= 7 ? urgency + "44" : COLORS.border}`, display: "flex", alignItems: "center", gap: 16 }}>
                       <div style={{ width: 48, height: 48, borderRadius: 10, background: urgency + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <span style={{ color: urgency, fontSize: 18 }}>{days <= 0 ? "🔴" : days <= 3 ? "🔥" : days <= 7 ? "⚠️" : "📅"}</span>
+                        <span style={{ fontSize: 18 }}>{days <= 0 ? "🔴" : days <= 3 ? "🔥" : days <= 7 ? "⚠️" : "📅"}</span>
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -467,10 +445,8 @@ export default function App() {
                           {days <= 0 ? "Due today!" : days === 1 ? "Due tomorrow!" : `Due in ${days} days — ${formatDate(a.dueDate)}`}
                         </div>
                       </div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, minWidth: 80, textAlign: "right" }}>
-                        {a.amount > 0 ? formatCurrency(a.amount) : "—"}
-                      </div>
-                      <Btn onClick={() => dismissAlert(a.id)} variant="secondary" style={{ padding: "7px 12px", fontSize: 12, color: COLORS.muted }}>Dismiss</Btn>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, minWidth: 80, textAlign: "right" }}>{a.amount > 0 ? formatCurrency(a.amount) : "—"}</div>
+                      <Btn onClick={() => dismissAlert(a.id)} variant="secondary" s={{ padding: "7px 12px", fontSize: 12, color: COLORS.muted }}>Dismiss</Btn>
                     </div>
                   );
                 })}
@@ -494,8 +470,7 @@ export default function App() {
           <Input label="Description" value={newInvoice.description} onChange={e => setNewInvoice({ ...newInvoice, description: e.target.value })} placeholder="e.g. Web redesign Q2" />
           <Input label="Due Date" type="date" value={newInvoice.dueDate} onChange={e => setNewInvoice({ ...newInvoice, dueDate: e.target.value })} />
           <Select label="Type" value={newInvoice.type} onChange={e => setNewInvoice({ ...newInvoice, type: e.target.value })}>
-            <option value="business">Business</option>
-            <option value="personal">Personal</option>
+            <option value="business">Business</option><option value="personal">Personal</option>
           </Select>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn variant="secondary" onClick={() => setShowInvoiceModal(false)}>Cancel</Btn>
@@ -503,7 +478,6 @@ export default function App() {
           </div>
         </Modal>
       )}
-
       {showExpenseModal && (
         <Modal title="Add Expense" onClose={() => setShowExpenseModal(false)}>
           <Input label="Expense Name" value={newExpense.name} onChange={e => setNewExpense({ ...newExpense, name: e.target.value })} placeholder="e.g. Figma Pro" />
@@ -511,8 +485,7 @@ export default function App() {
           <Input label="Category" value={newExpense.category} onChange={e => setNewExpense({ ...newExpense, category: e.target.value })} placeholder="e.g. Software, Meals, Utilities" />
           <Input label="Date" type="date" value={newExpense.date} onChange={e => setNewExpense({ ...newExpense, date: e.target.value })} />
           <Select label="Type" value={newExpense.type} onChange={e => setNewExpense({ ...newExpense, type: e.target.value })}>
-            <option value="business">Business</option>
-            <option value="personal">Personal</option>
+            <option value="business">Business</option><option value="personal">Personal</option>
           </Select>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn variant="secondary" onClick={() => setShowExpenseModal(false)}>Cancel</Btn>
@@ -520,19 +493,30 @@ export default function App() {
           </div>
         </Modal>
       )}
-
       {showAlertModal && (
         <Modal title="New Payment Alert" onClose={() => setShowAlertModal(false)}>
           <Input label="Payment Label" value={newAlert.label} onChange={e => setNewAlert({ ...newAlert, label: e.target.value })} placeholder="e.g. Rent, Subscription" />
           <Input label="Amount ($) — optional" type="number" value={newAlert.amount} onChange={e => setNewAlert({ ...newAlert, amount: e.target.value })} placeholder="0.00" />
           <Input label="Due Date" type="date" value={newAlert.dueDate} onChange={e => setNewAlert({ ...newAlert, dueDate: e.target.value })} />
           <Select label="Type" value={newAlert.type} onChange={e => setNewAlert({ ...newAlert, type: e.target.value })}>
-            <option value="personal">Personal</option>
-            <option value="business">Business</option>
+            <option value="personal">Personal</option><option value="business">Business</option>
           </Select>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
             <Btn variant="secondary" onClick={() => setShowAlertModal(false)}>Cancel</Btn>
             <Btn onClick={addAlert}>Set Alert</Btn>
+          </div>
+        </Modal>
+      )}
+      {showProfileModal && (
+        <Modal title="My Profile" onClose={() => setShowProfileModal(false)} wide>
+          <p style={{ color: COLORS.muted, fontSize: 13, marginBottom: 20, marginTop: -8 }}>This info appears on your generated PDF invoices.</p>
+          <Input label="Full Name / Business Name" value={editProfile.name} onChange={e => setEditProfile({ ...editProfile, name: e.target.value })} placeholder="e.g. Jane Doe" />
+          <Input label="Email" value={editProfile.email} onChange={e => setEditProfile({ ...editProfile, email: e.target.value })} placeholder="e.g. jane@email.com" />
+          <Input label="Phone (optional)" value={editProfile.phone} onChange={e => setEditProfile({ ...editProfile, phone: e.target.value })} placeholder="e.g. +1 555 000 1234" />
+          <Input label="Address" value={editProfile.address} onChange={e => setEditProfile({ ...editProfile, address: e.target.value })} placeholder="e.g. New York, NY 10001" />
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+            <Btn variant="secondary" onClick={() => setShowProfileModal(false)}>Cancel</Btn>
+            <Btn onClick={saveProfile}>Save Profile</Btn>
           </div>
         </Modal>
       )}
