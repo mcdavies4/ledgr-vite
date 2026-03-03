@@ -123,11 +123,22 @@ const Btn = ({ children, onClick, variant = "primary", style = {} }) => (
   }}>{children}</button>
 );
 
+// localStorage helpers
+const load = (key, fallback) => {
+  try {
+    const val = localStorage.getItem(key);
+    return val ? JSON.parse(val) : fallback;
+  } catch { return fallback; }
+};
+const save = (key, val) => {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+};
+
 export default function App() {
   const [tab, setTab] = useState("dashboard");
-  const [invoices, setInvoices] = useState(INITIAL_INVOICES);
-  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
-  const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+  const [invoices, setInvoices] = useState(() => load("ledgr_invoices", INITIAL_INVOICES));
+  const [expenses, setExpenses] = useState(() => load("ledgr_expenses", INITIAL_EXPENSES));
+  const [alerts, setAlerts] = useState(() => load("ledgr_alerts", INITIAL_ALERTS));
   const [filterType, setFilterType] = useState("all");
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -135,6 +146,11 @@ export default function App() {
   const [newInvoice, setNewInvoice] = useState({ client: "", amount: "", dueDate: "", type: "business", description: "", status: "pending" });
   const [newExpense, setNewExpense] = useState({ name: "", amount: "", category: "", date: "", type: "business" });
   const [newAlert, setNewAlert] = useState({ label: "", amount: "", dueDate: "", type: "personal" });
+
+  // Auto-save whenever data changes
+  useEffect(() => save("ledgr_invoices", invoices), [invoices]);
+  useEffect(() => save("ledgr_expenses", expenses), [expenses]);
+  useEffect(() => save("ledgr_alerts", alerts), [alerts]);
 
   // Metrics
   const totalIncome = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
@@ -242,6 +258,24 @@ export default function App() {
                 {f === "all" ? "All finances" : f === "business" ? "💼 Business" : "🏠 Personal"}
               </button>
             ))}
+          </div>
+
+          {/* Reset */}
+          <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, marginTop: 16 }}>
+            <button onClick={() => {
+              if (window.confirm("Reset all data to demo? This cannot be undone.")) {
+                setInvoices(INITIAL_INVOICES);
+                setExpenses(INITIAL_EXPENSES);
+                setAlerts(INITIAL_ALERTS);
+              }
+            }} style={{
+              display: "block", width: "100%", padding: "7px 12px", borderRadius: 6,
+              border: "none", cursor: "pointer", textAlign: "left",
+              background: "transparent", color: COLORS.muted,
+              fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+            }}>
+              ↺ Reset demo data
+            </button>
           </div>
         </div>
 
