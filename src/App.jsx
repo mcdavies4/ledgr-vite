@@ -213,6 +213,32 @@ export default function App() {
   const dismissAlert = (id) => setAlerts(prev => prev.filter(a => a.id !== id));
   const saveProfile = () => { setProfile(editProfile); setShowProfileModal(false); };
 
+  const exportCSV = (type) => {
+    let rows, filename;
+    if (type === "invoices") {
+      rows = [
+        ["Invoice #", "Client", "Description", "Amount", "Status", "Due Date", "Type"],
+        ...invoices.map((inv, i) => [
+          `INV-${String(inv.id).slice(-5).padStart(5, "0")}`,
+          inv.client, inv.description, inv.amount, inv.status, inv.dueDate, inv.type
+        ])
+      ];
+      filename = "ledgr-invoices.csv";
+    } else {
+      rows = [
+        ["Name", "Amount", "Category", "Date", "Type"],
+        ...expenses.map(e => [e.name, e.amount, e.category, e.date, e.type])
+      ];
+      filename = "ledgr-expenses.csv";
+    }
+    const csv = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const tabs = ["dashboard", "invoices", "expenses", "alerts", "charts"];
 
   return (
@@ -355,7 +381,10 @@ export default function App() {
                   <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 4px" }}>Invoices</h1>
                   <p style={{ color: COLORS.muted, fontSize: 14, margin: 0 }}>{filteredInvoices.length} invoices · {formatCurrency(filteredInvoices.reduce((s, i) => s + i.amount, 0))} total</p>
                 </div>
+                <div style={{ display: "flex", gap: 10 }}>
                 <Btn onClick={() => setShowInvoiceModal(true)}>+ New Invoice</Btn>
+                <Btn onClick={() => exportCSV("invoices")} variant="secondary" s={{ fontSize: 13, padding: "9px 16px" }}>⬇ Export CSV</Btn>
+                </div>
               </div>
               {profile.name === "Your Name" && (
                 <div style={{ background: "#2a1e0a", border: `1px solid ${COLORS.warning}55`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
@@ -397,7 +426,10 @@ export default function App() {
                   <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 4px" }}>Expenses</h1>
                   <p style={{ color: COLORS.muted, fontSize: 14, margin: 0 }}>{filteredExpenses.length} entries · {formatCurrency(filteredExpenses.reduce((s, e) => s + e.amount, 0))} total</p>
                 </div>
+                <div style={{ display: "flex", gap: 10 }}>
                 <Btn onClick={() => setShowExpenseModal(true)}>+ Add Expense</Btn>
+                <Btn onClick={() => exportCSV("expenses")} variant="secondary" s={{ fontSize: 13, padding: "9px 16px" }}>⬇ Export CSV</Btn>
+                </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[...filteredExpenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => (
