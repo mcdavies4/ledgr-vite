@@ -187,8 +187,10 @@ function PaywallScreen({ session, onSignOut }) {
 function TrialBanner({ profile, session }) {
   const [loading, setLoading] = useState(false);
   if (!profile?.trial_ends_at) return null;
+  const status = profile?.subscription_status;
+  if (status === "active" || status === "past_due") return null;
   const days = daysUntil(profile.trial_ends_at);
-  if (days <= 0 || profile?.subscription_status === "active") return null;
+  if (days <= 0) return null;
 
   const urgent = days <= 3;
 
@@ -368,14 +370,31 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle ?success=true from Stripe redirect
+  // Handle ?success=true from Stripe redirect — poll until subscription is active
+  const [stripeSuccess, setStripeSuccess] = useState(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("success") === "true") {
       window.history.replaceState({}, "", window.location.pathname);
-      setTimeout(() => loadAll(), 2000); // give webhook time to fire
+      setStripeSuccess(true);
     }
   }, []);
+
+  // Poll Supabase until subscription_status is active (webhook may take a few seconds)
+  useEffect(() => {
+    if (!stripeSuccess || !session) return;
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      const { data } = await supabase.from("profiles").select("subscription_status").eq("id", session.user.id).single();
+      if (data?.subscription_status === "active" || attempts >= 10) {
+        clearInterval(interval);
+        setStripeSuccess(false);
+        await loadAll();
+      }
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [stripeSuccess, session]);
 
   useEffect(() => { if (session) loadAll(); }, [session]);
 
@@ -431,11 +450,11 @@ export default function App() {
   const isActive = () => {
     if (!profile) return true; // still loading
     const status = profile.subscription_status;
-    if (status === "active") return true;
+    if (status === "active" || status === "past_due") return true; // give grace for past_due
     if (status === "trialing" || !status) {
       return profile.trial_ends_at ? daysUntil(profile.trial_ends_at) > 0 : true;
     }
-    return false;
+    return false; // canceled, unpaid, etc
   };
 
   const fInvoices = filter==="all"?invoices:invoices.filter(i=>i.type===filter);
@@ -449,6 +468,24 @@ export default function App() {
   const byCat        = expenses.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+e.amount;return a;},{});
 
   if (authLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"sans-serif"}}>Loading...</div>;
+
+  // Smooth Stripe success screen while webhook processes
+  if (stripeSuccess) return (
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'DM Sans',sans-serif"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      <div style={{textAlign:"center",maxWidth:360}}>
+        <div style={{width:72,height:72,background:C.accentDim,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 24px",fontSize:32}}>✓</div>
+        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:26,color:C.text,margin:"0 0 12px"}}>You're all set!</h2>
+        <p style={{color:C.muted,fontSize:15,marginBottom:32,lineHeight:1.6}}>Payment confirmed. Setting up your account…</p>
+        <div style={{display:"flex",justifyContent:"center",gap:8}}>
+          {[0,1,2].map(i=>(
+            <div key={i} style={{width:8,height:8,borderRadius:"50%",background:C.accent,opacity:0.3,animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite`}}/>
+          ))}
+        </div>
+        <style>{`@keyframes pulse{0%,100%{opacity:0.3;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}`}</style>
+      </div>
+    </div>
+  );
   if (!session) return <AuthScreen/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
