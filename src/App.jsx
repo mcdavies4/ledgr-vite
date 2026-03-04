@@ -391,12 +391,16 @@ export default function App() {
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [selectedClient, setSelectedClient] = useState(null); // for client detail view
+  const [newClient, setNewClient] = useState({ name:"", email:"", phone:"", company:"", address:"", notes:"" });
+  const [editClient, setEditClient] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const close = () => setModal(null);
-  const [newInv, setNewInv] = useState({ client:"", amount:"", due_date:"", type:"business", description:"", status:"pending" });
+  const [newInv, setNewInv] = useState({ client:"", client_id:null, amount:"", due_date:"", type:"business", description:"", status:"pending" });
   const [newExp, setNewExp] = useState({ name:"", amount:"", category:"", date:"", type:"business" });
   const [newAlr, setNewAlr] = useState({ label:"", amount:"", due_date:"", type:"personal" });
   const [editPro, setEditPro] = useState({ name:"", email:"", phone:"", address:"" });
@@ -439,15 +443,17 @@ export default function App() {
     setLoading(true);
     const uid = session?.user?.id;
     if (!uid) return;
-    const [inv, exp, alr, pro] = await Promise.all([
+    const [inv, exp, alr, pro, cli] = await Promise.all([
       supabase.from("invoices").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("expenses").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("alerts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
+      supabase.from("clients").select("*").eq("user_id",uid).order("name",{ascending:true}),
       supabase.from("profiles").select("*").eq("id",uid).single(),
     ]);
     if (inv.data) setInvoices(inv.data);
     if (exp.data) setExpenses(exp.data);
     if (alr.data) setAlerts(alr.data);
+    if (cli.data) setClients(cli.data);
     if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
     else {
       // First login — create profile with trial
@@ -480,6 +486,24 @@ export default function App() {
   const delInvoice = async (id) => { await supabase.from("invoices").delete().eq("id",id); setInvoices(p=>p.filter(x=>x.id!==id)); };
   const delExpense = async (id) => { await supabase.from("expenses").delete().eq("id",id); setExpenses(p=>p.filter(x=>x.id!==id)); };
   const delAlert   = async (id) => { await supabase.from("alerts").delete().eq("id",id); setAlerts(p=>p.filter(x=>x.id!==id)); };
+
+  const addClient = async () => {
+    if (!newClient.name) return;
+    const { data } = await supabase.from("clients").insert({...newClient, user_id:session.user.id}).select().single();
+    if (data) setClients(p=>[...p,data].sort((a,b)=>a.name.localeCompare(b.name)));
+    setNewClient({name:"",email:"",phone:"",company:"",address:"",notes:""}); close();
+  };
+  const updateClient = async () => {
+    if (!editClient?.name) return;
+    await supabase.from("clients").update(editClient).eq("id", editClient.id);
+    setClients(p=>p.map(x=>x.id===editClient.id?editClient:x).sort((a,b)=>a.name.localeCompare(b.name)));
+    setEditClient(null); close();
+  };
+  const delClient = async (id) => {
+    await supabase.from("clients").delete().eq("id",id);
+    setClients(p=>p.filter(x=>x.id!==id));
+    setSelectedClient(null);
+  };
   const saveProfile = async () => { await supabase.from("profiles").upsert({...editPro,id:session.user.id}); setProfile(editPro); if(editPro.currency) setCurrencyStore(editPro.currency); close(); };
   const signOut = () => supabase.auth.signOut();
 
@@ -526,7 +550,7 @@ export default function App() {
   if (!session) return <AuthScreen/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"charts",label:"Charts"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"charts",label:"Charts"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const SidebarContent=()=>(
@@ -717,6 +741,119 @@ export default function App() {
                 </div>
               )}
 
+              {tab==="clients"&&(
+                <div>
+                  {selectedClient ? (
+                    // ── Client detail view ──
+                    <div>
+                      <button onClick={()=>setSelectedClient(null)} style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:20,padding:0}}>← Back to clients</button>
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                          <div>
+                            <div style={{width:48,height:48,borderRadius:12,background:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,color:C.accent,marginBottom:12}}>
+                              {selectedClient.name.charAt(0).toUpperCase()}
+                            </div>
+                            <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:22,margin:"0 0 4px"}}>{selectedClient.name}</h2>
+                            {selectedClient.company&&<div style={{fontSize:13,color:C.textDim,marginBottom:8}}>{selectedClient.company}</div>}
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              {selectedClient.email&&<div style={{fontSize:13,color:C.muted}}>✉ {selectedClient.email}</div>}
+                              {selectedClient.phone&&<div style={{fontSize:13,color:C.muted}}>✆ {selectedClient.phone}</div>}
+                              {selectedClient.address&&<div style={{fontSize:13,color:C.muted}}>⌖ {selectedClient.address}</div>}
+                              {selectedClient.notes&&<div style={{fontSize:13,color:C.muted,marginTop:4,fontStyle:"italic"}}>"{selectedClient.notes}"</div>}
+                            </div>
+                          </div>
+                          <Btn variant="secondary" onClick={()=>{setEditClient(selectedClient);setModal("edit-client");}} style={{padding:"8px 14px",fontSize:13}}>Edit</Btn>
+                        </div>
+                        {(()=>{
+                          const cli=selectedClient;
+                          const cliInvs=invoices.filter(i=>i.client_id===cli.id||i.client===cli.name);
+                          const totalBilled=cliInvs.reduce((s,i)=>s+i.amount,0);
+                          const totalPaid=cliInvs.filter(i=>i.status==="paid").reduce((s,i)=>s+i.amount,0);
+                          return(
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                              <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                                <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Total Billed</div>
+                                <div style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"'Playfair Display',serif"}}>{money(totalBilled,profile?.currency)}</div>
+                              </div>
+                              <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                                <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Collected</div>
+                                <div style={{fontSize:18,fontWeight:700,color:C.accent,fontFamily:"'Playfair Display',serif"}}>{money(totalPaid,profile?.currency)}</div>
+                              </div>
+                              <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                                <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Invoices</div>
+                                <div style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"'Playfair Display',serif"}}>{cliInvs.length}</div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Invoice History</h3>
+                      {invoices.filter(i=>i.client_id===selectedClient.id||i.client===selectedClient.name).length===0&&<p style={{color:C.muted,fontSize:13}}>No invoices yet for this client.</p>}
+                      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                        {invoices.filter(i=>i.client_id===selectedClient.id||i.client===selectedClient.name).map(inv=>(
+                          <div key={inv.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div>
+                              <div style={{fontSize:14,fontWeight:600,marginBottom:3}}>{inv.description||"Invoice"}</div>
+                              <div style={{fontSize:12,color:C.muted}}>Due {inv.due_date?fmtDate(inv.due_date):"—"}</div>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{money(inv.amount,profile?.currency)}</div>
+                              <StatusPill status={inv.status}/>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    // ── Clients list view ──
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
+                        <div>
+                          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Clients</h1>
+                          <p style={{color:C.muted,fontSize:13,margin:0}}>{clients.length} client{clients.length!==1?"s":""}</p>
+                        </div>
+                        <Btn onClick={()=>setModal("add-client")} style={{padding:"10px 14px",fontSize:13}}>+ Add</Btn>
+                      </div>
+                      {clients.length===0&&(
+                        <div style={{textAlign:"center",padding:60,color:C.muted}}>
+                          <div style={{fontSize:40,marginBottom:12}}>👥</div>
+                          <p style={{marginBottom:8}}>No clients yet.</p>
+                          <p style={{fontSize:13}}>Add your first client to link invoices and track history.</p>
+                        </div>
+                      )}
+                      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                        {clients.map(c=>{
+                          const cliInvs=invoices.filter(i=>i.client_id===c.id||i.client===c.name);
+                          const totalBilled=cliInvs.reduce((s,i)=>s+i.amount,0);
+                          const unpaid=cliInvs.filter(i=>i.status!=="paid").length;
+                          return(
+                            <div key={c.id} onClick={()=>setSelectedClient(c)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px",cursor:"pointer",transition:"border-color 0.2s"}}
+                              onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent+"44"}
+                              onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}
+                            >
+                              <div style={{display:"flex",alignItems:"center",gap:14}}>
+                                <div style={{width:44,height:44,borderRadius:12,background:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:C.accent,flexShrink:0}}>
+                                  {c.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontSize:15,fontWeight:700,marginBottom:2}}>{c.name}</div>
+                                  <div style={{fontSize:12,color:C.muted}}>{c.company||c.email||"No details added"}</div>
+                                </div>
+                                <div style={{textAlign:"right",flexShrink:0}}>
+                                  <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{money(totalBilled,profile?.currency)}</div>
+                                  {unpaid>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#3a2d1a",color:C.warning}}>{unpaid} unpaid</span>}
+                                  {unpaid===0&&cliInvs.length>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#1a3d2b",color:C.accent}}>All paid</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {tab==="charts"&&(()=>{
                 const months=Array.from({length:6},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-(5-i));return{key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`,label:d.toLocaleDateString("en-US",{month:"short",year:"2-digit"})};});
                 const mInc=months.map(m=>invoices.filter(i=>i.status==="paid"&&i.due_date?.startsWith(m.key)).reduce((s,i)=>s+i.amount,0));
@@ -782,10 +919,33 @@ export default function App() {
         </div>
       )}
 
-      {modal==="invoice"&&(<Modal title="New Invoice" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div>}><TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value})} placeholder="e.g. Acme Corp"/><TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/><TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/><TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/><SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Modal>)}
+      {modal==="invoice"&&(<Modal title="New Invoice" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div>}>
+  {clients.length>0&&<SelectInput label="Pick a Client (optional)" value={newInv.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewInv({...newInv,client_id:e.target.value||null,client:c?c.name:newInv.client})}}><option value="">— Enter manually —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.company?" · "+c.company:""}</option>)}</SelectInput>}
+  <TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
+  <TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/>
+  <TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/>
+  <TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/>
+  <SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput>
+</Modal>)}
       {modal==="expense"&&(<Modal title="Add Expense" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div>}><TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/><TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/><TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/><TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/><SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Modal>)}
       {modal==="alert"&&(<Modal title="New Alert" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addAlert} style={{flex:1}}>Set Alert</Btn></div>}><TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/><TextInput label="Amount ($) optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/><TextInput label="Due Date" type="date" value={newAlr.due_date} onChange={e=>setNewAlr({...newAlr,due_date:e.target.value})}/><SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}><option value="personal">Personal</option><option value="business">Business</option></SelectInput></Modal>)}
-      {modal==="profile"&&(<Modal title="My Profile" onClose={close} wide footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save Profile</Btn></div>}><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-4}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/><SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>{CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}</SelectInput></Modal>)}
+      {modal==="add-client"&&(<Modal title="New Client" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addClient} style={{flex:1}}>Save Client</Btn></div>}>
+  <TextInput label="Full Name" value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} placeholder="Jane Smith"/>
+  <TextInput label="Company (optional)" value={newClient.company} onChange={e=>setNewClient({...newClient,company:e.target.value})} placeholder="Acme Corp"/>
+  <TextInput label="Email" value={newClient.email} onChange={e=>setNewClient({...newClient,email:e.target.value})} placeholder="jane@acme.com"/>
+  <TextInput label="Phone (optional)" value={newClient.phone} onChange={e=>setNewClient({...newClient,phone:e.target.value})} placeholder="+1 555 000 1234"/>
+  <TextInput label="Address (optional)" value={newClient.address} onChange={e=>setNewClient({...newClient,address:e.target.value})} placeholder="New York, NY"/>
+  <TextInput label="Notes (optional)" value={newClient.notes} onChange={e=>setNewClient({...newClient,notes:e.target.value})} placeholder="e.g. Net 30 payment terms"/>
+</Modal>)}
+{modal==="edit-client"&&editClient&&(<Modal title="Edit Client" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="danger" onClick={()=>delClient(editClient.id)} style={{padding:"11px 16px"}}>Delete</Btn><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={updateClient} style={{flex:1}}>Save</Btn></div>}>
+  <TextInput label="Full Name" value={editClient.name} onChange={e=>setEditClient({...editClient,name:e.target.value})} placeholder="Jane Smith"/>
+  <TextInput label="Company (optional)" value={editClient.company||""} onChange={e=>setEditClient({...editClient,company:e.target.value})} placeholder="Acme Corp"/>
+  <TextInput label="Email" value={editClient.email||""} onChange={e=>setEditClient({...editClient,email:e.target.value})} placeholder="jane@acme.com"/>
+  <TextInput label="Phone (optional)" value={editClient.phone||""} onChange={e=>setEditClient({...editClient,phone:e.target.value})} placeholder="+1 555 000 1234"/>
+  <TextInput label="Address (optional)" value={editClient.address||""} onChange={e=>setEditClient({...editClient,address:e.target.value})} placeholder="New York, NY"/>
+  <TextInput label="Notes (optional)" value={editClient.notes||""} onChange={e=>setEditClient({...editClient,notes:e.target.value})} placeholder="e.g. Net 30 payment terms"/>
+</Modal>)}
+{modal==="profile"&&(<Modal title="My Profile" onClose={close} wide footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save Profile</Btn></div>}><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-4}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/><SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>{CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}</SelectInput></Modal>)}
     </div>
   );
 }
