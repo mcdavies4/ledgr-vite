@@ -8,7 +8,35 @@ const C = {
   danger: "#F87171", muted: "#6B7280", text: "#F1F5F9", textDim: "#94A3B8",
 };
 
-const money = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+const CURRENCIES = [
+  { code:"USD", label:"USD — US Dollar", locale:"en-US" },
+  { code:"EUR", label:"EUR — Euro", locale:"de-DE" },
+  { code:"GBP", label:"GBP — British Pound", locale:"en-GB" },
+  { code:"NGN", label:"NGN — Nigerian Naira", locale:"en-NG" },
+  { code:"CAD", label:"CAD — Canadian Dollar", locale:"en-CA" },
+  { code:"AUD", label:"AUD — Australian Dollar", locale:"en-AU" },
+  { code:"ZAR", label:"ZAR — South African Rand", locale:"en-ZA" },
+  { code:"GHS", label:"GHS — Ghanaian Cedi", locale:"en-GH" },
+  { code:"KES", label:"KES — Kenyan Shilling", locale:"en-KE" },
+  { code:"INR", label:"INR — Indian Rupee", locale:"en-IN" },
+  { code:"JPY", label:"JPY — Japanese Yen", locale:"ja-JP" },
+  { code:"CNY", label:"CNY — Chinese Yuan", locale:"zh-CN" },
+  { code:"BRL", label:"BRL — Brazilian Real", locale:"pt-BR" },
+  { code:"MXN", label:"MXN — Mexican Peso", locale:"es-MX" },
+  { code:"AED", label:"AED — UAE Dirham", locale:"ar-AE" },
+];
+
+const getCurrency = () => {
+  try { return localStorage.getItem("ledgr_currency") || "USD"; } catch { return "USD"; }
+};
+const setCurrencyStore = (c) => {
+  try { localStorage.setItem("ledgr_currency", c); } catch {}
+};
+const getLocale = (code) => CURRENCIES.find(c=>c.code===code)?.locale || "en-US";
+const money = (n, currencyCode) => {
+  const code = currencyCode || getCurrency();
+  return new Intl.NumberFormat(getLocale(code), { style: "currency", currency: code }).format(n);
+};
 const fmtDate = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 86400000);
 
@@ -257,7 +285,7 @@ function AuthScreen() {
 // ── PDF ───────────────────────────────────────────────────────────────────────
 function generatePDF(inv, profile) {
   const num = `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
-  const m = (n) => new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
+  const currCode = profile.currency || "USD"; const m = (n) => new Intl.NumberFormat(CURRENCIES.find(c=>c.code===currCode)?.locale||"en-US",{style:"currency",currency:currCode}).format(n);
   const d = (v) => v ? new Date(v).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "N/A";
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${num}</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
@@ -354,7 +382,7 @@ export default function App() {
     if (inv.data) setInvoices(inv.data);
     if (exp.data) setExpenses(exp.data);
     if (alr.data) setAlerts(alr.data);
-    if (pro.data) { setProfile(pro.data); setEditPro(pro.data); }
+    if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
     else {
       // First login — create profile with trial
       await supabase.from("profiles").insert({ id: uid, email: session.user.email, name: "", phone: "", address: "" });
@@ -386,7 +414,7 @@ export default function App() {
   const delInvoice = async (id) => { await supabase.from("invoices").delete().eq("id",id); setInvoices(p=>p.filter(x=>x.id!==id)); };
   const delExpense = async (id) => { await supabase.from("expenses").delete().eq("id",id); setExpenses(p=>p.filter(x=>x.id!==id)); };
   const delAlert   = async (id) => { await supabase.from("alerts").delete().eq("id",id); setAlerts(p=>p.filter(x=>x.id!==id)); };
-  const saveProfile = async () => { await supabase.from("profiles").upsert({...editPro,id:session.user.id}); setProfile(editPro); close(); };
+  const saveProfile = async () => { await supabase.from("profiles").upsert({...editPro,id:session.user.id}); setProfile(editPro); if(editPro.currency) setCurrencyStore(editPro.currency); close(); };
   const signOut = () => supabase.auth.signOut();
 
   // ── Subscription gate ──
@@ -673,7 +701,11 @@ export default function App() {
       {modal==="invoice"&&(<Modal title="New Invoice" onClose={close}><TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value})} placeholder="e.g. Acme Corp"/><TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/><TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/><TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/><SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput><div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div></Modal>)}
       {modal==="expense"&&(<Modal title="Add Expense" onClose={close}><TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/><TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/><TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/><TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/><SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput><div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div></Modal>)}
       {modal==="alert"&&(<Modal title="New Alert" onClose={close}><TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/><TextInput label="Amount ($) optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/><TextInput label="Due Date" type="date" value={newAlr.due_date} onChange={e=>setNewAlr({...newAlr,due_date:e.target.value})}/><SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}><option value="personal">Personal</option><option value="business">Business</option></SelectInput><div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addAlert} style={{flex:1}}>Set Alert</Btn></div></Modal>)}
-      {modal==="profile"&&(<Modal title="My Profile" onClose={close} wide><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-8}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/><div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save</Btn></div></Modal>)}
+      {modal==="profile"&&(<Modal title="My Profile" onClose={close} wide><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-8}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/>
+        <SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>
+          {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}
+        </SelectInput>
+        <div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save</Btn></div></Modal>)}
     </div>
   );
 }
