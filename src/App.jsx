@@ -506,9 +506,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target.result;
-      const lines = text.split(/
-?
-/).filter(l => l.trim());
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) { alert("CSV appears empty."); setCsvParsing(false); return; }
       // Parse headers
       const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g,"").trim());
