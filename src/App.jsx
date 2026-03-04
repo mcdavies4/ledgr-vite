@@ -513,12 +513,25 @@ export default function App() {
   const connectBank = async () => {
     setBankLoading(true);
     try {
+      if (!window.Plaid) {
+        alert("Plaid not loaded. Please refresh the page and try again.");
+        setBankLoading(false);
+        return;
+      }
       // Get link token
-      const { link_token } = await callEdge("plaid-create-link-token", { user_id: session.user.id });
+      let linkToken;
+      try {
+        const result = await callEdge("plaid-create-link-token", { user_id: session.user.id });
+        linkToken = result.link_token;
+      } catch(e) {
+        alert("Could not get link token: " + e.message + "\n\nCheck that PLAID_CLIENT_ID and PLAID_SECRET are set correctly in Supabase Edge Function secrets.");
+        setBankLoading(false);
+        return;
+      }
 
       // Open Plaid Link
-      window.Plaid.create({
-        token: link_token,
+      const handler = window.Plaid.create({
+        token: linkToken,
         onSuccess: async (public_token, metadata) => {
           try {
             await callEdge("plaid-exchange-token", {
@@ -527,11 +540,15 @@ export default function App() {
               institution: metadata.institution,
             });
             await loadAll();
-          } catch(e) { alert("Failed to connect bank: " + e.message); }
+          } catch(e) { alert("Failed to save bank connection: " + e.message); }
         },
-        onExit: () => {},
-      }).open();
-    } catch(e) { alert("Failed to start bank connection: " + e.message); }
+        onExit: (err) => {
+          if (err) console.error("Plaid exit error:", err);
+        },
+        onEvent: (eventName) => console.log("Plaid event:", eventName),
+      });
+      handler.open();
+    } catch(e) { alert("Unexpected error: " + e.message); }
     setBankLoading(false);
   };
 
