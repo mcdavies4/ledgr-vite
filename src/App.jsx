@@ -78,26 +78,36 @@ function SelectInput({ label, children, ...props }) {
     </div>
   );
 }
-function Modal({ title, onClose, children, wide=false }) {
+function Modal({ title, onClose, children, wide=false, footer=null }) {
   const mobile = window.innerWidth < 768;
   return (
     <div onMouseDown={onClose} style={{ position:"fixed", top:0, left:0, width:"100vw", height:"100vh", background:"rgba(0,0,0,0.85)", display:"flex", alignItems: mobile ? "flex-end" : "center", justifyContent:"center", zIndex:99999, padding: mobile ? 0 : 20 }}>
       <div onMouseDown={e=>e.stopPropagation()} style={{
         background:C.card, border:`1px solid ${C.border}`,
         borderRadius: mobile ? "20px 20px 0 0" : "16px",
-        padding:"24px 20px",
-        paddingBottom: mobile ? "calc(24px + env(safe-area-inset-bottom))" : "24px",
         width:"100%", maxWidth:wide?560:480,
-        maxHeight: mobile ? "85vh" : "90vh",
-        overflowY:"auto",
+        maxHeight: mobile ? "88vh" : "90vh",
+        display:"flex", flexDirection:"column",
         boxShadow: mobile ? "0 -20px 60px rgba(0,0,0,0.5)" : "0 25px 60px rgba(0,0,0,0.6)"
       }}>
-        {mobile && <div style={{ width:40, height:4, background:C.border, borderRadius:2, margin:"0 auto 20px" }}/>}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <h3 style={{ color:C.text, fontSize:18, fontFamily:"'Playfair Display',serif", margin:0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background:C.border, border:"none", color:C.text, cursor:"pointer", fontSize:14, fontWeight:700, width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
+        {/* Drag handle + header — fixed */}
+        <div style={{ padding:"20px 20px 0", flexShrink:0 }}>
+          {mobile && <div style={{ width:40, height:4, background:C.border, borderRadius:2, margin:"0 auto 16px" }}/>}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+            <h3 style={{ color:C.text, fontSize:18, fontFamily:"'Playfair Display',serif", margin:0 }}>{title}</h3>
+            <button onClick={onClose} style={{ background:C.border, border:"none", color:C.text, cursor:"pointer", fontSize:14, fontWeight:700, width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
+          </div>
         </div>
-        {children}
+        {/* Scrollable content */}
+        <div style={{ overflowY:"auto", flex:1, padding:"0 20px" }}>
+          {children}
+        </div>
+        {/* Sticky footer with buttons */}
+        {footer && (
+          <div style={{ padding:"16px 20px", paddingBottom: mobile ? "calc(16px + env(safe-area-inset-bottom))" : "20px", borderTop:`1px solid ${C.border}`, flexShrink:0, background:C.card }}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -698,14 +708,10 @@ export default function App() {
         </div>
       )}
 
-      {modal==="invoice"&&(<Modal title="New Invoice" onClose={close}><TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value})} placeholder="e.g. Acme Corp"/><TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/><TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/><TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/><SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput><div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div></Modal>)}
-      {modal==="expense"&&(<Modal title="Add Expense" onClose={close}><TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/><TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/><TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/><TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/><SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput><div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div></Modal>)}
-      {modal==="alert"&&(<Modal title="New Alert" onClose={close}><TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/><TextInput label="Amount ($) optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/><TextInput label="Due Date" type="date" value={newAlr.due_date} onChange={e=>setNewAlr({...newAlr,due_date:e.target.value})}/><SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}><option value="personal">Personal</option><option value="business">Business</option></SelectInput><div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addAlert} style={{flex:1}}>Set Alert</Btn></div></Modal>)}
-      {modal==="profile"&&(<Modal title="My Profile" onClose={close} wide><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-8}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/>
-        <SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>
-          {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}
-        </SelectInput>
-        <div style={{display:"flex",gap:10,marginTop:8}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save</Btn></div></Modal>)}
+      {modal==="invoice"&&(<Modal title="New Invoice" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div>}><TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value})} placeholder="e.g. Acme Corp"/><TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/><TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/><TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/><SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Modal>)}
+      {modal==="expense"&&(<Modal title="Add Expense" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div>}><TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/><TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/><TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/><TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/><SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Modal>)}
+      {modal==="alert"&&(<Modal title="New Alert" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addAlert} style={{flex:1}}>Set Alert</Btn></div>}><TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/><TextInput label="Amount ($) optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/><TextInput label="Due Date" type="date" value={newAlr.due_date} onChange={e=>setNewAlr({...newAlr,due_date:e.target.value})}/><SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}><option value="personal">Personal</option><option value="business">Business</option></SelectInput></Modal>)}
+      {modal==="profile"&&(<Modal title="My Profile" onClose={close} wide footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save Profile</Btn></div>}><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-4}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/><SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>{CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}</SelectInput></Modal>)}
     </div>
   );
 }
