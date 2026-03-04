@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { startCheckout } from "./stripe";
 
 const C = {
   bg: "#0D0F14", surface: "#161921", card: "#1C2030", border: "#252A3A",
@@ -21,6 +22,7 @@ function useIsMobile() {
   return mobile;
 }
 
+// ── UI Primitives ─────────────────────────────────────────────────────────────
 function Badge({ type }) {
   return <span style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", padding:"2px 7px", borderRadius:4, background:type==="business"?"#1e2d4a":"#2a1e3a", color:type==="business"?"#60A5FA":"#C084FC", textTransform:"uppercase" }}>{type}</span>;
 }
@@ -63,6 +65,104 @@ function Modal({ title, onClose, children, wide=false }) {
   );
 }
 
+// ── Paywall Screen ────────────────────────────────────────────────────────────
+function PaywallScreen({ session, onSignOut }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleSubscribe = async () => {
+    setLoading(true);
+    try {
+      await startCheckout(session.user.id, session.user.email);
+    } catch (e) {
+      alert("Something went wrong. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'DM Sans',sans-serif" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      <div style={{ width:"100%", maxWidth:440 }}>
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ width:52, height:52, background:C.accent, borderRadius:14, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, color:"#0D0F14", marginBottom:16 }}>L</div>
+          <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:C.text, margin:"0 0 8px" }}>Ledgr Pro</h1>
+          <p style={{ color:C.muted, fontSize:15, margin:0 }}>Your free trial has ended.</p>
+        </div>
+
+        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:20, overflow:"hidden", marginBottom:16 }}>
+          {/* Price header */}
+          <div style={{ background:C.accentDim, borderBottom:`1px solid ${C.border}`, padding:"28px 32px", textAlign:"center" }}>
+            <div style={{ color:C.accent, fontSize:42, fontWeight:700, fontFamily:"'Playfair Display',serif", lineHeight:1 }}>$15</div>
+            <div style={{ color:C.textDim, fontSize:14, marginTop:4 }}>per month · cancel anytime</div>
+          </div>
+
+          {/* Features */}
+          <div style={{ padding:"24px 32px" }}>
+            {[
+              "Unlimited invoices & PDF export",
+              "Expense tracking & CSV export",
+              "Payment alerts & reminders",
+              "Monthly trend charts",
+              "Business & personal views",
+              "Syncs across all your devices",
+            ].map((f, i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
+                <div style={{ width:20, height:20, borderRadius:"50%", background:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <span style={{ color:C.accent, fontSize:11, fontWeight:700 }}>✓</span>
+                </div>
+                <span style={{ fontSize:14, color:C.textDim }}>{f}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ padding:"0 32px 28px" }}>
+            <Btn onClick={handleSubscribe} disabled={loading} style={{ width:"100%", fontSize:15, padding:"14px" }}>
+              {loading ? "Redirecting to Stripe..." : "Subscribe for $15/mo"}
+            </Btn>
+            <p style={{ color:C.muted, fontSize:12, textAlign:"center", marginTop:12, marginBottom:0 }}>
+              Secured by Stripe · No hidden fees
+            </p>
+          </div>
+        </div>
+
+        <div style={{ textAlign:"center" }}>
+          <button onClick={onSignOut} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
+            Sign out ({session.user.email})
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Trial Banner ──────────────────────────────────────────────────────────────
+function TrialBanner({ profile, session }) {
+  const [loading, setLoading] = useState(false);
+  if (!profile?.trial_ends_at) return null;
+  const days = daysUntil(profile.trial_ends_at);
+  if (days <= 0 || profile?.subscription_status === "active") return null;
+
+  const urgent = days <= 3;
+
+  const handleUpgrade = async () => {
+    setLoading(true);
+    try { await startCheckout(session.user.id, session.user.email); }
+    catch { setLoading(false); }
+  };
+
+  return (
+    <div style={{ background: urgent ? "#3a1a0a" : "#1a2a1a", borderBottom:`1px solid ${urgent ? C.danger+"44" : C.accent+"44"}`, padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+      <span style={{ fontSize:13, color: urgent ? C.danger : C.accent, fontWeight:500 }}>
+        {urgent ? "⚠️" : "⏳"} {days} day{days===1?"":"s"} left in your free trial
+      </span>
+      <button onClick={handleUpgrade} disabled={loading} style={{ marginLeft:"auto", background:C.accent, color:"#0D0F14", border:"none", borderRadius:6, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
+        {loading ? "..." : "Upgrade — $15/mo"}
+      </button>
+    </div>
+  );
+}
+
+// ── Auth Screen ───────────────────────────────────────────────────────────────
 function AuthScreen() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -104,29 +204,27 @@ function AuthScreen() {
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
       <div style={{ width:"100%", maxWidth:400 }}>
         <div style={{ textAlign:"center", marginBottom:40 }}>
-          <div style={{ width:52, height:52, background:C.accent, borderRadius:14, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:26, marginBottom:16 }}>L</div>
+          <div style={{ width:52, height:52, background:C.accent, borderRadius:14, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, color:"#0D0F14", marginBottom:16 }}>L</div>
           <div style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:700, color:C.text }}>Ledgr</div>
           <div style={{ color:C.muted, fontSize:13, marginTop:4 }}>Personal & Business Finance</div>
         </div>
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:32 }}>
           <h2 style={{ color:C.text, fontSize:18, fontWeight:700, margin:"0 0 24px", fontFamily:"'Playfair Display',serif" }}>
-            {mode==="login"?"Welcome back":mode==="signup"?"Create account":"Reset password"}
+            {mode==="login"?"Welcome back":mode==="signup"?"Start your 14-day free trial":"Reset password"}
           </h2>
           <TextInput label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" onKeyDown={e=>e.key==="Enter"&&handle()}/>
           {mode!=="reset" && <TextInput label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="min 6 characters" onKeyDown={e=>e.key==="Enter"&&handle()}/>}
           {error && <div style={{ background:"#3a1a1a", border:`1px solid ${C.danger}44`, borderRadius:8, padding:"10px 14px", color:C.danger, fontSize:13, marginBottom:16 }}>{error}</div>}
           {message && <div style={{ background:C.accentDim, border:`1px solid ${C.accent}44`, borderRadius:8, padding:"10px 14px", color:C.accent, fontSize:13, marginBottom:16 }}>{message}</div>}
           <Btn onClick={handle} disabled={loading} style={{ width:"100%", marginBottom:12 }}>
-            {loading?"Please wait...":mode==="login"?"Log in":mode==="signup"?"Create account":"Send reset email"}
+            {loading?"Please wait...":mode==="login"?"Log in":mode==="signup"?"Start free trial":"Send reset email"}
           </Btn>
-          {mode !== "reset" && (
+          {mode!=="reset" && (
             <>
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-                <div style={{ flex:1, height:1, background:"#252A3A" }}/>
-                <span style={{ color:"#6B7280", fontSize:12 }}>or</span>
-                <div style={{ flex:1, height:1, background:"#252A3A" }}/>
+                <div style={{ flex:1, height:1, background:C.border }}/><span style={{ color:C.muted, fontSize:12 }}>or</span><div style={{ flex:1, height:1, background:C.border }}/>
               </div>
-              <button onClick={signInWithGoogle} style={{ width:"100%", padding:"11px 20px", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer", border:"1px solid #252A3A", background:"#161921", color:"#F1F5F9", fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:16, minHeight:44 }}>
+              <button onClick={signInWithGoogle} style={{ width:"100%", padding:"11px 20px", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer", border:`1px solid ${C.border}`, background:C.surface, color:C.text, fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:16, minHeight:44 }}>
                 <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
                 Continue with Google
               </button>
@@ -134,17 +232,19 @@ function AuthScreen() {
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"center" }}>
             {mode==="login" && <>
-              <button onClick={()=>{setMode("signup");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.accent, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>No account? Sign up free</button>
+              <button onClick={()=>{setMode("signup");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.accent, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>No account? Start 14-day free trial</button>
               <button onClick={()=>{setMode("reset");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>Forgot password?</button>
             </>}
             {mode!=="login" && <button onClick={()=>{setMode("login");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.accent, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>Back to log in</button>}
           </div>
         </div>
+        {mode==="signup" && <p style={{ color:C.muted, fontSize:12, textAlign:"center", marginTop:12 }}>14 days free · then $15/month · cancel anytime</p>}
       </div>
     </div>
   );
 }
 
+// ── PDF ───────────────────────────────────────────────────────────────────────
 function generatePDF(inv, profile) {
   const num = `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
   const m = (n) => new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
@@ -169,7 +269,7 @@ function generatePDF(inv, profile) {
   @media print{.pbtn{display:none}}</style></head>
   <body><button class="pbtn" onclick="window.print()">Save as PDF</button>
   <div class="top"><div class="logo">Ledgr<span>.</span></div><div style="text-align:right"><h2 style="font-size:24px;font-weight:700">Invoice</h2><div style="color:#6B7280;font-size:13px">${num}</div></div></div>
-  <div class="stripe"></div>
+  <div class="stripe-bar" style="height:3px;background:linear-gradient(90deg,#16a34a,#4ade80);margin-bottom:40px"></div>
   <div class="grid2">
     <div><div class="lbl">From</div><div class="val">${profile.name||"Your Name"}</div><div class="sub">${profile.email||""}${profile.phone?"<br/>"+profile.phone:""}${profile.address?"<br/>"+profile.address:""}</div></div>
     <div><div class="lbl">Bill To</div><div class="val">${inv.client}</div></div>
@@ -194,6 +294,7 @@ function exportCSV(type, invoices, expenses) {
   const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(new Blob([csv],{type:"text/csv"})),download:filename}); a.click();
 }
 
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const isMobile = useIsMobile();
   const [session, setSession] = useState(null);
@@ -203,7 +304,7 @@ export default function App() {
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  const [profile, setProfile] = useState({ name:"", email:"", phone:"", address:"" });
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -219,11 +320,21 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Handle ?success=true from Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "true") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setTimeout(() => loadAll(), 2000); // give webhook time to fire
+    }
+  }, []);
+
   useEffect(() => { if (session) loadAll(); }, [session]);
 
   const loadAll = async () => {
     setLoading(true);
-    const uid = session.user.id;
+    const uid = session?.user?.id;
+    if (!uid) return;
     const [inv, exp, alr, pro] = await Promise.all([
       supabase.from("invoices").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("expenses").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
@@ -234,6 +345,12 @@ export default function App() {
     if (exp.data) setExpenses(exp.data);
     if (alr.data) setAlerts(alr.data);
     if (pro.data) { setProfile(pro.data); setEditPro(pro.data); }
+    else {
+      // First login — create profile with trial
+      await supabase.from("profiles").insert({ id: uid, email: session.user.email, name: "", phone: "", address: "" });
+      const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
+      if (data) { setProfile(data); setEditPro(data); }
+    }
     setLoading(false);
   };
 
@@ -262,6 +379,17 @@ export default function App() {
   const saveProfile = async () => { await supabase.from("profiles").upsert({...editPro,id:session.user.id}); setProfile(editPro); close(); };
   const signOut = () => supabase.auth.signOut();
 
+  // ── Subscription gate ──
+  const isActive = () => {
+    if (!profile) return true; // still loading
+    const status = profile.subscription_status;
+    if (status === "active") return true;
+    if (status === "trialing" || !status) {
+      return profile.trial_ends_at ? daysUntil(profile.trial_ends_at) > 0 : true;
+    }
+    return false;
+  };
+
   const fInvoices = filter==="all"?invoices:invoices.filter(i=>i.type===filter);
   const fExpenses = filter==="all"?expenses:expenses.filter(e=>e.type===filter);
   const upcoming  = alerts.map(a=>({...a,days:daysUntil(a.due_date)})).filter(a=>a.days<=30).sort((a,b)=>a.days-b.days);
@@ -274,8 +402,9 @@ export default function App() {
 
   if (authLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"sans-serif"}}>Loading...</div>;
   if (!session) return <AuthScreen/>;
+  if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",icon:"D",label:"Dashboard"},{id:"invoices",icon:"I",label:"Invoices"},{id:"expenses",icon:"E",label:"Expenses"},{id:"alerts",icon:"A",label:"Alerts"},{id:"charts",icon:"C",label:"Charts"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"charts",label:"Charts"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const SidebarContent=()=>(
@@ -305,7 +434,8 @@ export default function App() {
         ))}
       </div>
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,marginTop:16}}>
-        <button onClick={()=>{setEditPro(profile);setModal("profile");setSidebarOpen(false);}} style={{display:"block",width:"100%",padding:"8px 12px",borderRadius:6,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>My Profile</button>
+        {profile?.subscription_status==="active" && <div style={{fontSize:11,color:C.accent,fontWeight:600,padding:"4px 12px",marginBottom:8}}>✓ Pro subscriber</div>}
+        <button onClick={()=>{setEditPro(profile||{});setModal("profile");setSidebarOpen(false);}} style={{display:"block",width:"100%",padding:"8px 12px",borderRadius:6,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>My Profile</button>
         <button onClick={signOut} style={{display:"block",width:"100%",padding:"8px 12px",borderRadius:6,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.danger,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>Sign Out</button>
       </div>
     </>
@@ -322,14 +452,16 @@ export default function App() {
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-      <div style={{display:"flex",flex:1,minHeight:0}}>
 
+      {/* Trial banner — always visible at top */}
+      {profile && <TrialBanner profile={profile} session={session}/>}
+
+      <div style={{display:"flex",flex:1,minHeight:0}}>
         {!isMobile&&(
           <div style={{width:220,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"28px 16px",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh"}}>
             <SidebarContent/>
           </div>
         )}
-
         {isMobile&&sidebarOpen&&(
           <div onMouseDown={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9998}}>
             <div onMouseDown={e=>e.stopPropagation()} style={{width:260,height:"100%",background:C.surface,borderRight:`1px solid ${C.border}`,padding:"28px 16px",display:"flex",flexDirection:"column",overflowY:"auto"}}>
@@ -374,7 +506,7 @@ export default function App() {
                     ))}
                   </div>
                   {upcoming.length>0&&(
-                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
                       <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:600}}>Upcoming Payments</h3>
                       {upcoming.map(a=>(
                         <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
@@ -390,10 +522,7 @@ export default function App() {
               {tab==="invoices"&&(
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
-                    <div>
-                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Invoices</h1>
-                      <p style={{color:C.muted,fontSize:13,margin:0}}>{fInvoices.length} invoices</p>
-                    </div>
+                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Invoices</h1><p style={{color:C.muted,fontSize:13,margin:0}}>{fInvoices.length} invoices</p></div>
                     <div style={{display:"flex",gap:8,flexShrink:0}}>
                       <Btn onClick={()=>setModal("invoice")} style={{padding:"10px 14px",fontSize:13}}>+ New</Btn>
                       <Btn variant="secondary" onClick={()=>exportCSV("invoices",invoices,expenses)} style={{padding:"10px 14px",fontSize:13}}>CSV</Btn>
@@ -409,7 +538,7 @@ export default function App() {
                         </div>
                         <div style={{fontSize:12,color:C.muted,marginBottom:12}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"—"}</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <Btn variant="secondary" onClick={()=>generatePDF(inv,profile)} style={{padding:"8px 12px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
+                          <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 12px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 12px",fontSize:12,flex:1}}>Mark Paid</Btn>}
                           <Btn variant="danger" onClick={()=>delInvoice(inv.id)} style={{padding:"8px 12px",fontSize:12}}>Delete</Btn>
                         </div>
@@ -422,10 +551,7 @@ export default function App() {
               {tab==="expenses"&&(
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
-                    <div>
-                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Expenses</h1>
-                      <p style={{color:C.muted,fontSize:13,margin:0}}>{fExpenses.length} entries</p>
-                    </div>
+                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Expenses</h1><p style={{color:C.muted,fontSize:13,margin:0}}>{fExpenses.length} entries</p></div>
                     <div style={{display:"flex",gap:8,flexShrink:0}}>
                       <Btn onClick={()=>setModal("expense")} style={{padding:"10px 14px",fontSize:13}}>+ Add</Btn>
                       <Btn variant="secondary" onClick={()=>exportCSV("expenses",invoices,expenses)} style={{padding:"10px 14px",fontSize:13}}>CSV</Btn>
@@ -435,10 +561,7 @@ export default function App() {
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
                     {[...fExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp=>(
                       <div key={exp.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{flex:1}}>
-                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{exp.name}</span><Badge type={exp.type}/></div>
-                          <div style={{fontSize:12,color:C.muted}}>{exp.category} · {exp.date?fmtDate(exp.date):"—"}</div>
-                        </div>
+                        <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{exp.name}</span><Badge type={exp.type}/></div><div style={{fontSize:12,color:C.muted}}>{exp.category} · {exp.date?fmtDate(exp.date):"—"}</div></div>
                         <div style={{fontSize:15,fontWeight:700,color:C.danger}}>{money(exp.amount)}</div>
                         <button onClick={()=>delExpense(exp.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>X</button>
                       </div>
@@ -450,10 +573,7 @@ export default function App() {
               {tab==="alerts"&&(
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                    <div>
-                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Alerts</h1>
-                      <p style={{color:C.muted,fontSize:13,margin:0}}>Never miss a due date</p>
-                    </div>
+                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Alerts</h1><p style={{color:C.muted,fontSize:13,margin:0}}>Never miss a due date</p></div>
                     <Btn onClick={()=>setModal("alert")} style={{padding:"10px 14px",fontSize:13}}>+ Add</Btn>
                   </div>
                   {alerts.length===0&&<div style={{textAlign:"center",padding:60,color:C.muted}}>No alerts set.</div>}
@@ -464,17 +584,9 @@ export default function App() {
                       return(
                         <div key={a.id} style={{background:C.card,borderRadius:12,padding:"16px",border:`1px solid ${days<=7?urg+"44":C.border}`}}>
                           <div style={{display:"flex",alignItems:"center",gap:12}}>
-                            <div style={{width:44,height:44,borderRadius:10,background:urg+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:20}}>
-                              {days<=0?"!":days<=3?"!!":days<=7?"!":"ok"}
-                            </div>
-                            <div style={{flex:1}}>
-                              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{a.label}</span><Badge type={a.type}/></div>
-                              <div style={{fontSize:12,color:urg,fontWeight:500}}>{days<=0?"Due today!":days===1?"Due tomorrow!":`Due in ${days} days`}</div>
-                            </div>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{a.amount>0?money(a.amount):"—"}</div>
-                              <button onClick={()=>delAlert(a.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Dismiss</button>
-                            </div>
+                            <div style={{width:44,height:44,borderRadius:10,background:urg+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18,color:urg,fontWeight:700}}>{days<=0?"!":days<=3?"!!":"ok"}</div>
+                            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{a.label}</span><Badge type={a.type}/></div><div style={{fontSize:12,color:urg,fontWeight:500}}>{days<=0?"Due today!":days===1?"Due tomorrow!":`Due in ${days} days`}</div></div>
+                            <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{a.amount>0?money(a.amount):"—"}</div><button onClick={()=>delAlert(a.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Dismiss</button></div>
                           </div>
                         </div>
                       );
@@ -540,7 +652,7 @@ export default function App() {
       {isMobile&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200}}>
           {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px 10px",border:"none",background:"transparent",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:"'DM Sans',sans-serif",position:"relative"}}>
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",border:"none",background:"transparent",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:"'DM Sans',sans-serif",position:"relative"}}>
               <span style={{fontSize:9,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>{t.label}</span>
               {t.id==="alerts"&&upcoming.length>0&&<span style={{position:"absolute",top:4,right:"50%",marginRight:-20,background:C.warning,color:"#000",fontSize:8,fontWeight:700,padding:"1px 4px",borderRadius:8}}>{upcoming.length}</span>}
             </button>
