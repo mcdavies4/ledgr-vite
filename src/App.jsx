@@ -516,15 +516,6 @@ export default function App() {
       // Get link token
       const { link_token } = await callEdge("plaid-create-link-token", { user_id: session.user.id });
 
-      // Load Plaid Link SDK
-      await new Promise((resolve, reject) => {
-        if (window.Plaid) { resolve(null); return; }
-        const s = document.createElement("script");
-        s.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
-        s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
-      });
-
       // Open Plaid Link
       window.Plaid.create({
         token: link_token,
