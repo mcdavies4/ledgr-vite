@@ -6,19 +6,17 @@ const COLORS = {
   danger: "#F87171", muted: "#6B7280", text: "#F1F5F9", textDim: "#94A3B8",
 };
 
-const formatCurrency = (n) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / (1000 * 60 * 60 * 24));
+const fmt = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+const fmtDate = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const daysUntil = (d) => Math.ceil((new Date(d) - new Date()) / 86400000);
 
-const INITIAL_INVOICES = [
+const INVOICES0 = [
   { id: 1, client: "Acme Corp", amount: 3200, status: "paid", dueDate: "2025-02-10", type: "business", description: "Web redesign Q1" },
   { id: 2, client: "PixelBridge", amount: 1500, status: "pending", dueDate: "2026-03-15", type: "business", description: "Logo & branding" },
   { id: 3, client: "NovaTech", amount: 4800, status: "overdue", dueDate: "2026-02-20", type: "business", description: "App development sprint" },
   { id: 4, client: "Freelance Guild", amount: 750, status: "pending", dueDate: "2026-03-20", type: "business", description: "Workshop facilitation" },
 ];
-const INITIAL_EXPENSES = [
+const EXPENSES0 = [
   { id: 1, name: "Adobe Creative Cloud", amount: 54.99, category: "Software", date: "2026-02-28", type: "business" },
   { id: 2, name: "Groceries", amount: 180.5, category: "Personal", date: "2026-03-01", type: "personal" },
   { id: 3, name: "Figma Pro", amount: 15, category: "Software", date: "2026-02-25", type: "business" },
@@ -26,694 +24,627 @@ const INITIAL_EXPENSES = [
   { id: 5, name: "Client lunch", amount: 67, category: "Meals", date: "2026-03-01", type: "business" },
   { id: 6, name: "Gym membership", amount: 40, category: "Health", date: "2026-03-01", type: "personal" },
 ];
-const INITIAL_ALERTS = [
+const ALERTS0 = [
   { id: 1, label: "Rent due", amount: 1850, dueDate: "2026-03-05", type: "personal" },
   { id: 2, label: "Notion subscription", amount: 16, dueDate: "2026-03-08", type: "business" },
   { id: 3, label: "Tax estimated payment", amount: 1200, dueDate: "2026-04-15", type: "business" },
 ];
-const DEFAULT_PROFILE = { name: "Your Name", email: "you@email.com", address: "Your City, State", phone: "" };
+const PROFILE0 = { name: "Your Name", email: "you@email.com", address: "Your City, State", phone: "" };
 
-const load = (key, fallback) => {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
-  catch { return fallback; }
-};
-const save = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
+const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+const persist = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
-const Badge = ({ type }) => (
-  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 4,
-    background: type === "business" ? "#1e2d4a" : "#2a1e3a",
-    color: type === "business" ? "#60A5FA" : "#C084FC", textTransform: "uppercase" }}>{type}</span>
-);
+// ── small components ──────────────────────────────────────────────────────────
 
-const StatusPill = ({ status }) => {
-  const map = {
-    paid: { bg: "#1a3d2b", color: "#4ADE80", label: "Paid" },
-    pending: { bg: "#3a2d1a", color: "#FBBF24", label: "Pending" },
-    overdue: { bg: "#3a1a1a", color: "#F87171", label: "Overdue" },
-  };
-  const s = map[status];
-  return <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: s.bg, color: s.color }}>{s.label}</span>;
-};
+function Badge({ type }) {
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", padding: "2px 7px", borderRadius: 4,
+      background: type === "business" ? "#1e2d4a" : "#2a1e3a",
+      color: type === "business" ? "#60A5FA" : "#C084FC", textTransform: "uppercase" }}>
+      {type}
+    </span>
+  );
+}
 
-const Modal = ({ title, onClose, children, wide }) => (
-  <div onClick={onClose} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "20px" }}>
-    <div onClick={e => e.stopPropagation()} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: 32, width: "100%", maxWidth: wide ? 520 : 420, boxShadow: "0 25px 60px rgba(0,0,0,0.5)", maxHeight: "calc(100vh - 40px)", overflowY: "auto", position: "relative" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <h3 style={{ color: COLORS.text, fontSize: 18, fontFamily: "'Playfair Display', serif", margin: 0 }}>{title}</h3>
-        <button onClick={onClose} style={{ background: COLORS.border, border: "none", color: COLORS.text, cursor: "pointer", fontSize: 16, width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
-      </div>
+function StatusPill({ status }) {
+  const map = { paid: ["#1a3d2b","#4ADE80","Paid"], pending: ["#3a2d1a","#FBBF24","Pending"], overdue: ["#3a1a1a","#F87171","Overdue"] };
+  const [bg, color, label] = map[status] || map.pending;
+  return <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: bg, color }}>{label}</span>;
+}
+
+function Btn({ children, onClick, variant = "primary", style = {} }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600,
+        cursor: "pointer", border: "none", fontFamily: "'DM Sans', sans-serif",
+        background: variant === "primary" ? COLORS.accent : COLORS.border,
+        color: variant === "primary" ? "#0D0F14" : COLORS.textDim,
+        ...style
+      }}>
+      {children}
+    </button>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: "block", color: COLORS.textDim, fontSize: 12, fontWeight: 600,
+        marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
       {children}
     </div>
-  </div>
-);
+  );
+}
 
-const Input = ({ label, ...props }) => (
-  <div style={{ marginBottom: 16 }}>
-    <label style={{ display: "block", color: COLORS.textDim, fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
-    <input {...props} style={{ width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" }} />
-  </div>
-);
+function TextInput({ label, ...props }) {
+  return (
+    <Field label={label}>
+      <input {...props} style={{ width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`,
+        borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14,
+        outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" }} />
+    </Field>
+  );
+}
 
-const Select = ({ label, children, ...props }) => (
-  <div style={{ marginBottom: 16 }}>
-    <label style={{ display: "block", color: COLORS.textDim, fontSize: 12, fontWeight: 600, marginBottom: 6, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
-    <select {...props} style={{ width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" }}>{children}</select>
-  </div>
-);
+function SelectInput({ label, children, ...props }) {
+  return (
+    <Field label={label}>
+      <select {...props} style={{ width: "100%", background: COLORS.surface, border: `1px solid ${COLORS.border}`,
+        borderRadius: 8, padding: "10px 12px", color: COLORS.text, fontSize: 14,
+        outline: "none", boxSizing: "border-box", fontFamily: "'DM Sans', sans-serif" }}>
+        {children}
+      </select>
+    </Field>
+  );
+}
 
-const Btn = ({ children, onClick, variant = "primary", style: s = {} }) => (
-  <button onClick={onClick} style={{ padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", border: "none", fontFamily: "'DM Sans', sans-serif",
-    background: variant === "primary" ? COLORS.accent : COLORS.border,
-    color: variant === "primary" ? "#0D0F14" : COLORS.textDim, ...s }}>{children}</button>
-);
+// ── Modal — self-contained, no z-index fights ─────────────────────────────────
+function Modal({ title, onClose, children, wide = false }) {
+  return (
+    <div
+      style={{
+        position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+        background: "rgba(0,0,0,0.8)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 99999,
+      }}
+      onMouseDown={onClose}
+    >
+      <div
+        style={{
+          background: COLORS.card, border: `1px solid ${COLORS.border}`,
+          borderRadius: 16, padding: 32,
+          width: "90vw", maxWidth: wide ? 520 : 420,
+          maxHeight: "85vh", overflowY: "auto",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h3 style={{ color: COLORS.text, fontSize: 18, fontFamily: "'Playfair Display', serif", margin: 0 }}>{title}</h3>
+          <button
+            onClick={onClose}
+            style={{ background: COLORS.border, border: "none", color: COLORS.text,
+              cursor: "pointer", fontSize: 14, fontWeight: 700,
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center" }}>
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
-const generatePDF = (inv, profile) => {
-  const invoiceNum = `INV-${String(inv.id).slice(-5).padStart(5, "0")}`;
-  const fmt = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-  const fmtD = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—";
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
-  <title>Invoice ${invoiceNum}</title>
+// ── PDF ───────────────────────────────────────────────────────────────────────
+function generatePDF(inv, profile) {
+  const num = `INV-${String(inv.id).slice(-5).padStart(5,"0")}`;
+  const money = (n) => new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
+  const date = (d) => d ? new Date(d).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "—";
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${num}</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'DM Sans',sans-serif;background:#fff;color:#111827;padding:64px;max-width:820px;margin:0 auto;line-height:1.5}
-    .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px}
-    .logo{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;color:#111827}
-    .logo span{color:#16a34a}
-    .inv-meta{text-align:right}
-    .inv-meta h2{font-size:26px;font-weight:700;margin-bottom:4px}
-    .inv-meta .num{font-size:13px;color:#6B7280;letter-spacing:0.04em}
-    .stripe{height:3px;background:linear-gradient(90deg,#16a34a,#4ade80);border-radius:2px;margin-bottom:44px}
-    .parties{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin-bottom:44px}
-    .plabel{font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9CA3AF;margin-bottom:8px}
-    .pname{font-size:17px;font-weight:700;color:#111827;margin-bottom:4px}
-    .pdetail{font-size:13px;color:#4B5563;line-height:1.7}
-    .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:22px;margin-bottom:44px}
-    .ml{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#9CA3AF;margin-bottom:5px}
-    .mv{font-size:14px;font-weight:600;color:#111827}
-    .paid{color:#16a34a}.pending{color:#d97706}.overdue{color:#dc2626}
-    table{width:100%;border-collapse:collapse;margin-bottom:32px}
-    thead tr{border-bottom:2px solid #111827}
-    th{text-align:left;padding:0 0 12px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6B7280}
-    th:last-child{text-align:right}
-    td{padding:18px 0;border-bottom:1px solid #F3F4F6;font-size:14px;color:#111827;vertical-align:top}
-    td:last-child{text-align:right;font-weight:700;font-size:15px}
-    .total-section{display:flex;justify-content:flex-end;margin-bottom:48px}
-    .total-box{background:#111827;color:#fff;padding:24px 36px;border-radius:14px;min-width:240px}
-    .tlabel{font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:6px}
-    .tamount{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:#4ade80}
-    .footer{text-align:center;padding-top:28px;border-top:1px solid #E5E7EB;font-size:12px;color:#9CA3AF;line-height:1.8}
-    .print-btn{position:fixed;bottom:28px;right:28px;background:#16a34a;color:#fff;border:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 4px 20px rgba(22,163,74,0.35)}
-    @media print{.print-btn{display:none}body{padding:40px}}
-  </style></head><body>
-  <button class="print-btn" onclick="window.print()">⬇ Save as PDF</button>
-  <div class="top">
-    <div class="logo">Ledgr<span>.</span></div>
-    <div class="inv-meta"><h2>Invoice</h2><div class="num">${invoiceNum}</div></div>
-  </div>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;padding:60px;max-width:800px;margin:0 auto;color:#111}
+  .top{display:flex;justify-content:space-between;margin-bottom:48px}.logo{font-family:'Playfair Display',serif;font-size:28px}.logo span{color:#16a34a}
+  .stripe{height:3px;background:linear-gradient(90deg,#16a34a,#4ade80);margin-bottom:40px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:40px}
+  .lbl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9CA3AF;margin-bottom:6px}
+  .val{font-size:15px;font-weight:700}.sub{font-size:13px;color:#555;line-height:1.7}
+  .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:#F9FAFB;border-radius:10px;padding:20px;margin-bottom:40px}
+  table{width:100%;border-collapse:collapse;margin-bottom:32px}thead tr{border-bottom:2px solid #111}
+  th{text-align:left;padding:0 0 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6B7280}th:last-child{text-align:right}
+  td{padding:16px 0;border-bottom:1px solid #f0f0f0;font-size:14px}td:last-child{text-align:right;font-weight:700}
+  .total{display:flex;justify-content:flex-end;margin-bottom:48px}.tbox{background:#111;color:#fff;padding:22px 32px;border-radius:12px}
+  .tlbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:4px}
+  .tamt{font-family:'Playfair Display',serif;font-size:30px;color:#4ade80}
+  .foot{text-align:center;padding-top:24px;border-top:1px solid #eee;font-size:12px;color:#9CA3AF}
+  .pbtn{position:fixed;bottom:24px;right:24px;background:#16a34a;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+  @media print{.pbtn{display:none}}</style></head>
+  <body><button class="pbtn" onclick="window.print()">⬇ Save as PDF</button>
+  <div class="top"><div class="logo">Ledgr<span>.</span></div><div style="text-align:right"><h2 style="font-size:24px;font-weight:700">Invoice</h2><div style="color:#6B7280;font-size:13px">${num}</div></div></div>
   <div class="stripe"></div>
-  <div class="parties">
-    <div><div class="plabel">From</div><div class="pname">${profile.name}</div>
-    <div class="pdetail">${profile.email}${profile.phone ? "<br/>" + profile.phone : ""}${profile.address ? "<br/>" + profile.address : ""}</div></div>
-    <div><div class="plabel">Bill To</div><div class="pname">${inv.client}</div></div>
+  <div class="grid2">
+    <div><div class="lbl">From</div><div class="val">${profile.name}</div><div class="sub">${profile.email}${profile.phone?"<br/>"+profile.phone:""}${profile.address?"<br/>"+profile.address:""}</div></div>
+    <div><div class="lbl">Bill To</div><div class="val">${inv.client}</div></div>
   </div>
-  <div class="meta-grid">
-    <div><div class="ml">Invoice Date</div><div class="mv">${fmtD(new Date().toISOString())}</div></div>
-    <div><div class="ml">Due Date</div><div class="mv">${fmtD(inv.dueDate)}</div></div>
-    <div><div class="ml">Status</div><div class="mv ${inv.status}">${inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}</div></div>
+  <div class="meta">
+    <div><div class="lbl">Invoice Date</div><div class="val" style="font-size:13px">${date(new Date().toISOString())}</div></div>
+    <div><div class="lbl">Due Date</div><div class="val" style="font-size:13px">${date(inv.dueDate)}</div></div>
+    <div><div class="lbl">Status</div><div class="val" style="font-size:13px;color:${inv.status==="paid"?"#16a34a":inv.status==="overdue"?"#dc2626":"#d97706"}">${inv.status.charAt(0).toUpperCase()+inv.status.slice(1)}</div></div>
   </div>
-  <table>
-    <thead><tr><th style="width:60%">Description</th><th>Category</th><th>Amount</th></tr></thead>
-    <tbody><tr>
-      <td>${inv.description || "Services rendered"}</td>
-      <td style="color:#6B7280;font-size:13px">${inv.type.charAt(0).toUpperCase() + inv.type.slice(1)}</td>
-      <td>${fmt(inv.amount)}</td>
-    </tr></tbody>
-  </table>
-  <div class="total-section"><div class="total-box"><div class="tlabel">Total Due</div><div class="tamount">${fmt(inv.amount)}</div></div></div>
-  <div class="footer">Thank you for your business.${profile.email ? "<br/>" + profile.email : ""}<br/>Generated by Ledgr</div>
-</body></html>`;
-  const win = window.open("", "_blank");
-  win.document.write(html);
-  win.document.close();
-};
+  <table><thead><tr><th style="width:60%">Description</th><th>Type</th><th>Amount</th></tr></thead>
+  <tbody><tr><td>${inv.description||"Services rendered"}</td><td style="color:#6B7280">${inv.type}</td><td>${money(inv.amount)}</td></tr></tbody></table>
+  <div class="total"><div class="tbox"><div class="tlbl">Total Due</div><div class="tamt">${money(inv.amount)}</div></div></div>
+  <div class="foot">Thank you for your business · Generated by Ledgr</div>
+  </body></html>`;
+  const w = window.open("","_blank");
+  w.document.write(html);
+  w.document.close();
+}
 
+// ── CSV ───────────────────────────────────────────────────────────────────────
+function exportCSV(type, invoices, expenses) {
+  let rows, filename;
+  if (type === "invoices") {
+    rows = [["Invoice #","Client","Description","Amount","Status","Due Date","Type"],
+      ...invoices.map(i => [`INV-${String(i.id).slice(-5).padStart(5,"0")}`,i.client,i.description,i.amount,i.status,i.dueDate,i.type])];
+    filename = "ledgr-invoices.csv";
+  } else {
+    rows = [["Name","Amount","Category","Date","Type"],
+      ...expenses.map(e => [e.name,e.amount,e.category,e.date,e.type])];
+    filename = "ledgr-expenses.csv";
+  }
+  const csv = rows.map(r => r.map(v => `"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv],{type:"text/csv"})), download: filename });
+  a.click();
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("dashboard");
-  const [invoices, setInvoices] = useState(() => load("ledgr_invoices", INITIAL_INVOICES));
-  const [expenses, setExpenses] = useState(() => load("ledgr_expenses", INITIAL_EXPENSES));
-  const [alerts, setAlerts] = useState(() => load("ledgr_alerts", INITIAL_ALERTS));
-  const [profile, setProfile] = useState(() => load("ledgr_profile", DEFAULT_PROFILE));
-  const [filterType, setFilterType] = useState("all");
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [newInvoice, setNewInvoice] = useState({ client: "", amount: "", dueDate: "", type: "business", description: "", status: "pending" });
-  const [newExpense, setNewExpense] = useState({ name: "", amount: "", category: "", date: "", type: "business" });
-  const [newAlert, setNewAlert] = useState({ label: "", amount: "", dueDate: "", type: "personal" });
-  const [editProfile, setEditProfile] = useState(profile);
+  const [filter, setFilter] = useState("all");
+  const [invoices, setInvoices] = useState(() => load("ledgr_inv", INVOICES0));
+  const [expenses, setExpenses] = useState(() => load("ledgr_exp", EXPENSES0));
+  const [alerts, setAlerts]     = useState(() => load("ledgr_alr", ALERTS0));
+  const [profile, setProfile]   = useState(() => load("ledgr_pro", PROFILE0));
 
-  useEffect(() => save("ledgr_invoices", invoices), [invoices]);
-  useEffect(() => save("ledgr_expenses", expenses), [expenses]);
-  useEffect(() => save("ledgr_alerts", alerts), [alerts]);
-  useEffect(() => save("ledgr_profile", profile), [profile]);
+  const [modal, setModal] = useState(null); // "invoice"|"expense"|"alert"|"profile"
+  const closeModal = () => setModal(null);
 
-  const totalIncome = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
-  const totalPending = invoices.filter(i => i.status === "pending").reduce((s, i) => s + i.amount, 0);
-  const totalOverdue = invoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
-  const netProfit = totalIncome - expenses.filter(e => e.type === "business").reduce((s, e) => s + e.amount, 0);
-  const filteredInvoices = filterType === "all" ? invoices : invoices.filter(i => i.type === filterType);
-  const filteredExpenses = filterType === "all" ? expenses : expenses.filter(e => e.type === filterType);
-  const upcomingAlerts = alerts.map(a => ({ ...a, days: daysUntil(a.dueDate) })).filter(a => a.days <= 30).sort((a, b) => a.days - b.days);
-  const expenseByCategory = expenses.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + e.amount; return acc; }, {});
+  const [newInv, setNewInv] = useState({ client:"", amount:"", dueDate:"", type:"business", description:"", status:"pending" });
+  const [newExp, setNewExp] = useState({ name:"", amount:"", category:"", date:"", type:"business" });
+  const [newAlr, setNewAlr] = useState({ label:"", amount:"", dueDate:"", type:"personal" });
+  const [editPro, setEditPro] = useState(profile);
+
+  useEffect(() => persist("ledgr_inv", invoices), [invoices]);
+  useEffect(() => persist("ledgr_exp", expenses), [expenses]);
+  useEffect(() => persist("ledgr_alr", alerts),   [alerts]);
+  useEffect(() => persist("ledgr_pro", profile),  [profile]);
+
+  const fInvoices = filter === "all" ? invoices : invoices.filter(i => i.type === filter);
+  const fExpenses = filter === "all" ? expenses : expenses.filter(e => e.type === filter);
+  const upcoming  = alerts.map(a => ({...a, days: daysUntil(a.dueDate)})).filter(a => a.days <= 30).sort((a,b) => a.days - b.days);
+
+  const totalIncome   = invoices.filter(i => i.status==="paid").reduce((s,i) => s+i.amount, 0);
+  const totalPending  = invoices.filter(i => i.status==="pending").reduce((s,i) => s+i.amount, 0);
+  const totalOverdue  = invoices.filter(i => i.status==="overdue").reduce((s,i) => s+i.amount, 0);
+  const totalExp      = expenses.reduce((s,e) => s+e.amount, 0);
+  const netProfit     = totalIncome - expenses.filter(e => e.type==="business").reduce((s,e) => s+e.amount, 0);
+  const byCat         = expenses.reduce((a,e) => { a[e.category]=(a[e.category]||0)+e.amount; return a; }, {});
 
   const addInvoice = () => {
-    if (!newInvoice.client || !newInvoice.amount) return;
-    setInvoices(prev => [...prev, { ...newInvoice, id: Date.now(), amount: parseFloat(newInvoice.amount) }]);
-    setNewInvoice({ client: "", amount: "", dueDate: "", type: "business", description: "", status: "pending" });
-    setShowInvoiceModal(false);
+    if (!newInv.client || !newInv.amount) return;
+    setInvoices(p => [...p, {...newInv, id: Date.now(), amount: parseFloat(newInv.amount)}]);
+    setNewInv({ client:"", amount:"", dueDate:"", type:"business", description:"", status:"pending" });
+    closeModal();
   };
   const addExpense = () => {
-    if (!newExpense.name || !newExpense.amount) return;
-    setExpenses(prev => [...prev, { ...newExpense, id: Date.now(), amount: parseFloat(newExpense.amount) }]);
-    setNewExpense({ name: "", amount: "", category: "", date: "", type: "business" });
-    setShowExpenseModal(false);
+    if (!newExp.name || !newExp.amount) return;
+    setExpenses(p => [...p, {...newExp, id: Date.now(), amount: parseFloat(newExp.amount)}]);
+    setNewExp({ name:"", amount:"", category:"", date:"", type:"business" });
+    closeModal();
   };
   const addAlert = () => {
-    if (!newAlert.label || !newAlert.dueDate) return;
-    setAlerts(prev => [...prev, { ...newAlert, id: Date.now(), amount: parseFloat(newAlert.amount) || 0 }]);
-    setNewAlert({ label: "", amount: "", dueDate: "", type: "personal" });
-    setShowAlertModal(false);
+    if (!newAlr.label || !newAlr.dueDate) return;
+    setAlerts(p => [...p, {...newAlr, id: Date.now(), amount: parseFloat(newAlr.amount)||0}]);
+    setNewAlr({ label:"", amount:"", dueDate:"", type:"personal" });
+    closeModal();
   };
-  const markInvoicePaid = (id) => setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: "paid" } : i));
-  const deleteInvoice = (id) => setInvoices(prev => prev.filter(i => i.id !== id));
-  const deleteExpense = (id) => setExpenses(prev => prev.filter(e => e.id !== id));
-  const dismissAlert = (id) => setAlerts(prev => prev.filter(a => a.id !== id));
-  const saveProfile = () => { setProfile(editProfile); setShowProfileModal(false); };
+  const saveProfile = () => { setProfile(editPro); closeModal(); };
 
-  const exportCSV = (type) => {
-    let rows, filename;
-    if (type === "invoices") {
-      rows = [
-        ["Invoice #", "Client", "Description", "Amount", "Status", "Due Date", "Type"],
-        ...invoices.map((inv, i) => [
-          `INV-${String(inv.id).slice(-5).padStart(5, "0")}`,
-          inv.client, inv.description, inv.amount, inv.status, inv.dueDate, inv.type
-        ])
-      ];
-      filename = "ledgr-invoices.csv";
-    } else {
-      rows = [
-        ["Name", "Amount", "Category", "Date", "Type"],
-        ...expenses.map(e => [e.name, e.amount, e.category, e.date, e.type])
-      ];
-      filename = "ledgr-expenses.csv";
-    }
-    const csv = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const tabs = ["dashboard", "invoices", "expenses", "alerts", "charts"];
+  const TABS = ["dashboard","invoices","expenses","alerts","charts"];
+  const ICONS = { dashboard:"◼", invoices:"◈", expenses:"◉", alerts:"◐", charts:"◫" };
 
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif", background: COLORS.bg, minHeight: "100vh", color: COLORS.text }}>
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-      <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div style={{ fontFamily:"'DM Sans',sans-serif", background:COLORS.bg, minHeight:"100vh", color:COLORS.text, display:"flex" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-        {/* Sidebar */}
-        <div style={{ width: 220, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`, padding: "28px 16px", display: "flex", flexDirection: "column", flexShrink: 0, position: "sticky", top: 0, height: "100vh", zIndex: 1 }}>
-          <div style={{ marginBottom: 36 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div style={{ width: 32, height: 32, background: COLORS.accent, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 16 }}>⚡</span>
-              </div>
-              <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 700, color: COLORS.text }}>Ledgr</span>
-            </div>
-            <p style={{ color: COLORS.muted, fontSize: 11, margin: 0, paddingLeft: 42 }}>Personal & Business</p>
+      {/* ── Sidebar ── */}
+      <div style={{ width:220, background:COLORS.surface, borderRight:`1px solid ${COLORS.border}`,
+        padding:"28px 16px", display:"flex", flexDirection:"column", flexShrink:0,
+        position:"sticky", top:0, height:"100vh" }}>
+        <div style={{ marginBottom:36 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+            <div style={{ width:32, height:32, background:COLORS.accent, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>⚡</div>
+            <span style={{ fontFamily:"'Playfair Display',serif", fontSize:18, fontWeight:700 }}>Ledgr</span>
           </div>
-          <nav style={{ flex: 1 }}>
-            {tabs.map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: tab === t ? COLORS.accentDim : "transparent", color: tab === t ? COLORS.accent : COLORS.textDim,
-                fontSize: 14, fontWeight: tab === t ? 600 : 400, marginBottom: 4, textAlign: "left", fontFamily: "'DM Sans', sans-serif" }}>
-                <span>{t === "dashboard" ? "◼" : t === "invoices" ? "◈" : t === "expenses" ? "◉" : t === "alerts" ? "◐" : "◫"}</span>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-                {t === "alerts" && upcomingAlerts.length > 0 && (
-                  <span style={{ marginLeft: "auto", background: COLORS.warning, color: "#000", fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10 }}>{upcomingAlerts.length}</span>
-                )}
-              </button>
-            ))}
-          </nav>
-          <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, marginTop: 16 }}>
-            <p style={{ color: COLORS.muted, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>View</p>
-            {["all", "business", "personal"].map(f => (
-              <button key={f} onClick={() => setFilterType(f)} style={{ display: "block", width: "100%", padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", textAlign: "left",
-                background: filterType === f ? COLORS.border : "transparent", color: filterType === f ? COLORS.text : COLORS.muted, fontSize: 13, fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>
-                {f === "all" ? "All finances" : f === "business" ? "💼 Business" : "🏠 Personal"}
-              </button>
-            ))}
-          </div>
-          <div style={{ borderTop: `1px solid ${COLORS.border}`, paddingTop: 16, marginTop: 16 }}>
-            <button onClick={() => { setEditProfile(profile); setShowProfileModal(true); }}
-              style={{ display: "block", width: "100%", padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", textAlign: "left", background: "transparent", color: COLORS.textDim, fontSize: 13, fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>
-              👤 My Profile
-            </button>
-            <button onClick={() => { if (window.confirm("Reset all data to demo?")) { setInvoices(INITIAL_INVOICES); setExpenses(INITIAL_EXPENSES); setAlerts(INITIAL_ALERTS); } }}
-              style={{ display: "block", width: "100%", padding: "7px 12px", borderRadius: 6, border: "none", cursor: "pointer", textAlign: "left", background: "transparent", color: COLORS.muted, fontSize: 12, fontFamily: "'DM Sans', sans-serif" }}>
-              ↺ Reset demo data
-            </button>
-          </div>
+          <p style={{ color:COLORS.muted, fontSize:11, margin:0, paddingLeft:42 }}>Personal & Business</p>
         </div>
 
-        {/* Main content */}
-        <div style={{ flex: 1, padding: "32px 36px", overflowY: "auto" }}>
+        <nav style={{ flex:1 }}>
+          {TABS.map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              display:"flex", alignItems:"center", gap:10, width:"100%",
+              padding:"10px 12px", borderRadius:8, border:"none", cursor:"pointer",
+              background: tab===t ? COLORS.accentDim : "transparent",
+              color: tab===t ? COLORS.accent : COLORS.textDim,
+              fontSize:14, fontWeight: tab===t ? 600 : 400,
+              marginBottom:4, textAlign:"left", fontFamily:"'DM Sans',sans-serif" }}>
+              <span>{ICONS[t]}</span>
+              {t.charAt(0).toUpperCase()+t.slice(1)}
+              {t==="alerts" && upcoming.length > 0 &&
+                <span style={{ marginLeft:"auto", background:COLORS.warning, color:"#000", fontSize:10, fontWeight:700, padding:"1px 6px", borderRadius:10 }}>{upcoming.length}</span>}
+            </button>
+          ))}
+        </nav>
 
-          {/* DASHBOARD */}
-          {tab === "dashboard" && (
-            <div>
-              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 6px", color: COLORS.text }}>Financial Overview</h1>
-              <p style={{ color: COLORS.muted, fontSize: 14, marginBottom: 32 }}>Your money, all in one place.</p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 32 }}>
-                {[
-                  { label: "Income Collected", value: formatCurrency(totalIncome), color: COLORS.accent, icon: "↑" },
-                  { label: "Pending Invoices", value: formatCurrency(totalPending), color: COLORS.warning, icon: "⏳" },
-                  { label: "Overdue", value: formatCurrency(totalOverdue), color: COLORS.danger, icon: "!" },
-                  { label: "Total Expenses", value: formatCurrency(totalExpenses), color: "#60A5FA", icon: "↓" },
-                  { label: "Net Profit", value: formatCurrency(netProfit), color: netProfit >= 0 ? COLORS.accent : COLORS.danger, icon: "≈" },
-                ].map((s, i) => (
-                  <div key={i} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                      <span style={{ color: COLORS.muted, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.label}</span>
-                      <span style={{ color: s.color, fontSize: 16 }}>{s.icon}</span>
-                    </div>
-                    <div style={{ color: s.color, fontSize: 22, fontWeight: 700, fontFamily: "'Playfair Display', serif" }}>{s.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-                <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
-                  <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Recent Invoices</h3>
-                  {invoices.slice(-4).reverse().map(inv => (
-                    <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, marginBottom: 14, borderBottom: `1px solid ${COLORS.border}` }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.text }}>{inv.client}</div>
-                        <div style={{ fontSize: 12, color: COLORS.muted }}>{inv.description}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>{formatCurrency(inv.amount)}</div>
-                        <StatusPill status={inv.status} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
-                  <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Upcoming Payments</h3>
-                  {upcomingAlerts.length === 0 && <p style={{ color: COLORS.muted, fontSize: 13 }}>No upcoming payments in 30 days.</p>}
-                  {upcomingAlerts.map(a => (
-                    <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14, marginBottom: 14, borderBottom: `1px solid ${COLORS.border}` }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.text }}>{a.label}</div>
-                        <div style={{ fontSize: 12, color: a.days <= 3 ? COLORS.danger : a.days <= 7 ? COLORS.warning : COLORS.muted }}>
-                          {a.days <= 0 ? "Due today!" : `Due in ${a.days} day${a.days === 1 ? "" : "s"}`}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>{formatCurrency(a.amount)}</div>
-                        <Badge type={a.type} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24, marginTop: 24 }}>
-                <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Spending by Category</h3>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                  {Object.entries(expenseByCategory).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
-                    const pct = Math.round((amt / totalExpenses) * 100);
-                    return (
-                      <div key={cat} style={{ flex: "1 1 180px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                          <span style={{ fontSize: 13, color: COLORS.textDim }}>{cat}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.text }}>{formatCurrency(amt)}</span>
-                        </div>
-                        <div style={{ background: COLORS.border, borderRadius: 4, height: 6 }}>
-                          <div style={{ width: `${pct}%`, height: "100%", background: COLORS.accent, borderRadius: 4 }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
+        <div style={{ borderTop:`1px solid ${COLORS.border}`, paddingTop:16, marginTop:16 }}>
+          <p style={{ color:COLORS.muted, fontSize:11, fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:8 }}>View</p>
+          {["all","business","personal"].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              display:"block", width:"100%", padding:"7px 12px", borderRadius:6,
+              border:"none", cursor:"pointer", textAlign:"left",
+              background: filter===f ? COLORS.border : "transparent",
+              color: filter===f ? COLORS.text : COLORS.muted,
+              fontSize:13, fontFamily:"'DM Sans',sans-serif", marginBottom:2 }}>
+              {f==="all" ? "All finances" : f==="business" ? "💼 Business" : "🏠 Personal"}
+            </button>
+          ))}
+        </div>
 
-          {/* INVOICES */}
-          {tab === "invoices" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <div>
-                  <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 4px" }}>Invoices</h1>
-                  <p style={{ color: COLORS.muted, fontSize: 14, margin: 0 }}>{filteredInvoices.length} invoices · {formatCurrency(filteredInvoices.reduce((s, i) => s + i.amount, 0))} total</p>
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                <Btn onClick={() => setShowInvoiceModal(true)}>+ New Invoice</Btn>
-                <Btn onClick={() => exportCSV("invoices")} variant="secondary" s={{ fontSize: 13, padding: "9px 16px" }}>⬇ Export CSV</Btn>
-                </div>
-              </div>
-              {profile.name === "Your Name" && (
-                <div style={{ background: "#2a1e0a", border: `1px solid ${COLORS.warning}55`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ color: COLORS.warning }}>⚠</span>
-                  <span style={{ fontSize: 13, color: COLORS.warning }}>Set up your profile so your name appears correctly on PDF invoices.</span>
-                  <button onClick={() => { setEditProfile(profile); setShowProfileModal(true); }} style={{ marginLeft: "auto", background: COLORS.warning, color: "#000", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>Set up →</button>
-                </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {filteredInvoices.map(inv => (
-                  <div key={inv.id} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "18px 22px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                        <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{inv.client}</span>
-                        <Badge type={inv.type} />
-                        <StatusPill status={inv.status} />
-                      </div>
-                      <div style={{ fontSize: 13, color: COLORS.muted }}>{inv.description} · Due {formatDate(inv.dueDate)}</div>
-                    </div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: COLORS.text, minWidth: 100, textAlign: "right" }}>{formatCurrency(inv.amount)}</div>
-                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                      <Btn onClick={() => generatePDF(inv, profile)} variant="secondary" s={{ padding: "7px 14px", fontSize: 12, color: COLORS.accent }}>🧾 PDF</Btn>
-                      {inv.status !== "paid" && (
-                        <Btn onClick={() => markInvoicePaid(inv.id)} s={{ padding: "7px 14px", fontSize: 12 }}>Mark Paid</Btn>
-                      )}
-                      <Btn onClick={() => deleteInvoice(inv.id)} variant="secondary" s={{ padding: "7px 12px", fontSize: 12, color: COLORS.danger }}>✕</Btn>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* EXPENSES */}
-          {tab === "expenses" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-                <div>
-                  <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 4px" }}>Expenses</h1>
-                  <p style={{ color: COLORS.muted, fontSize: 14, margin: 0 }}>{filteredExpenses.length} entries · {formatCurrency(filteredExpenses.reduce((s, e) => s + e.amount, 0))} total</p>
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                <Btn onClick={() => setShowExpenseModal(true)}>+ Add Expense</Btn>
-                <Btn onClick={() => exportCSV("expenses")} variant="secondary" s={{ fontSize: 13, padding: "9px 16px" }}>⬇ Export CSV</Btn>
-                </div>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {[...filteredExpenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => (
-                  <div key={exp.id} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.text }}>{exp.name}</span>
-                        <Badge type={exp.type} />
-                      </div>
-                      <div style={{ fontSize: 12, color: COLORS.muted }}>{exp.category} · {formatDate(exp.date)}</div>
-                    </div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.danger }}>{formatCurrency(exp.amount)}</div>
-                    <Btn onClick={() => deleteExpense(exp.id)} variant="secondary" s={{ padding: "6px 10px", fontSize: 12, color: COLORS.muted }}>✕</Btn>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ALERTS */}
-          {tab === "alerts" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-                <div>
-                  <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 4px" }}>Payment Alerts</h1>
-                  <p style={{ color: COLORS.muted, fontSize: 14, margin: 0 }}>Never miss a due date</p>
-                </div>
-                <Btn onClick={() => setShowAlertModal(true)}>+ Add Alert</Btn>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {[...alerts].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).map(a => {
-                  const days = daysUntil(a.dueDate);
-                  const urgency = days <= 3 ? COLORS.danger : days <= 7 ? COLORS.warning : COLORS.textDim;
-                  return (
-                    <div key={a.id} style={{ background: COLORS.card, borderRadius: 12, padding: "18px 22px", border: `1px solid ${days <= 7 ? urgency + "44" : COLORS.border}`, display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 10, background: urgency + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <span style={{ fontSize: 18 }}>{days <= 0 ? "🔴" : days <= 3 ? "🔥" : days <= 7 ? "⚠️" : "📅"}</span>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 15, fontWeight: 600, color: COLORS.text }}>{a.label}</span>
-                          <Badge type={a.type} />
-                        </div>
-                        <div style={{ fontSize: 13, color: urgency, fontWeight: 500 }}>
-                          {days <= 0 ? "Due today!" : days === 1 ? "Due tomorrow!" : `Due in ${days} days — ${formatDate(a.dueDate)}`}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, minWidth: 80, textAlign: "right" }}>{a.amount > 0 ? formatCurrency(a.amount) : "—"}</div>
-                      <Btn onClick={() => dismissAlert(a.id)} variant="secondary" s={{ padding: "7px 12px", fontSize: 12, color: COLORS.muted }}>Dismiss</Btn>
-                    </div>
-                  );
-                })}
-                {alerts.length === 0 && (
-                  <div style={{ textAlign: "center", padding: 60, color: COLORS.muted }}>
-                    <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-                    <p>No upcoming payment alerts.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* CHARTS */}
-          {tab === "charts" && (() => {
-            // Build last 6 months of data
-            const months = Array.from({ length: 6 }, (_, i) => {
-              const d = new Date();
-              d.setMonth(d.getMonth() - (5 - i));
-              return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }) };
-            });
-
-            const monthlyIncome = months.map(m =>
-              invoices.filter(inv => inv.status === "paid" && inv.dueDate?.startsWith(m.key)).reduce((s, i) => s + i.amount, 0)
-            );
-            const monthlyExpenses = months.map(m =>
-              expenses.filter(e => e.date?.startsWith(m.key)).reduce((s, e) => s + e.amount, 0)
-            );
-            const monthlyProfit = months.map((_, i) => monthlyIncome[i] - monthlyExpenses[i]);
-
-            const maxBar = Math.max(...monthlyIncome, ...monthlyExpenses, 1);
-            const chartH = 180;
-            const barW = 28;
-            const gap = 16;
-            const groupW = barW * 2 + gap;
-            const totalW = months.length * (groupW + 24);
-
-            // Expense category pie data
-            const catData = Object.entries(expenseByCategory).sort((a, b) => b[1] - a[1]);
-            const total = catData.reduce((s, [, v]) => s + v, 0);
-            const PIE_COLORS = ["#4ADE80", "#60A5FA", "#FBBF24", "#F87171", "#C084FC", "#34D399"];
-
-            // Simple arc path
-            const polarToCartesian = (cx, cy, r, deg) => {
-              const rad = (deg - 90) * Math.PI / 180;
-              return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-            };
-            const arcPath = (cx, cy, r, startDeg, endDeg) => {
-              const s = polarToCartesian(cx, cy, r, startDeg);
-              const e = polarToCartesian(cx, cy, r, endDeg);
-              const large = endDeg - startDeg > 180 ? 1 : 0;
-              return `M ${cx} ${cy} L ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y} Z`;
-            };
-
-            let cursor = 0;
-            const slices = catData.map(([cat, amt], i) => {
-              const pct = amt / total;
-              const start = cursor * 360;
-              cursor += pct;
-              const end = cursor * 360;
-              return { cat, amt, pct, start, end, color: PIE_COLORS[i % PIE_COLORS.length] };
-            });
-
-            return (
-              <div>
-                <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, margin: "0 0 6px", color: COLORS.text }}>Trends & Insights</h1>
-                <p style={{ color: COLORS.muted, fontSize: 14, marginBottom: 32 }}>Last 6 months at a glance.</p>
-
-                {/* Bar chart — income vs expenses */}
-                <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 28, marginBottom: 24 }}>
-                  <h3 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Income vs Expenses</h3>
-                  <p style={{ color: COLORS.muted, fontSize: 12, margin: "0 0 24px" }}>Monthly comparison · paid invoices vs logged expenses</p>
-                  <div style={{ overflowX: "auto" }}>
-                    <svg width={totalW} height={chartH + 50} style={{ display: "block" }}>
-                      {/* Grid lines */}
-                      {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
-                        const y = chartH - pct * chartH;
-                        return (
-                          <g key={i}>
-                            <line x1={0} y1={y} x2={totalW} y2={y} stroke={COLORS.border} strokeWidth={1} />
-                            <text x={0} y={y - 4} fontSize={10} fill={COLORS.muted}>{formatCurrency(pct * maxBar)}</text>
-                          </g>
-                        );
-                      })}
-                      {/* Bars */}
-                      {months.map((m, i) => {
-                        const x = i * (groupW + 24) + 48;
-                        const incH = (monthlyIncome[i] / maxBar) * chartH;
-                        const expH = (monthlyExpenses[i] / maxBar) * chartH;
-                        return (
-                          <g key={m.key}>
-                            {/* Income bar */}
-                            <rect x={x} y={chartH - incH} width={barW} height={incH} fill={COLORS.accent} rx={4} opacity={0.9} />
-                            {/* Expense bar */}
-                            <rect x={x + barW + 4} y={chartH - expH} width={barW} height={expH} fill={COLORS.danger} rx={4} opacity={0.8} />
-                            {/* Label */}
-                            <text x={x + barW} y={chartH + 18} textAnchor="middle" fontSize={11} fill={COLORS.muted}>{m.label}</text>
-                          </g>
-                        );
-                      })}
-                      {/* Net profit line */}
-                      {months.length > 1 && (
-                        <polyline
-                          points={months.map((_, i) => {
-                            const x = i * (groupW + 24) + 48 + barW;
-                            const profit = monthlyProfit[i];
-                            const y = chartH - (Math.max(0, profit) / maxBar) * chartH;
-                            return `${x},${y}`;
-                          }).join(" ")}
-                          fill="none" stroke={COLORS.warning} strokeWidth={2} strokeDasharray="4 2"
-                        />
-                      )}
-                    </svg>
-                  </div>
-                  {/* Legend */}
-                  <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-                    {[{ color: COLORS.accent, label: "Income" }, { color: COLORS.danger, label: "Expenses" }, { color: COLORS.warning, label: "Net profit (dashed)" }].map(l => (
-                      <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 12, height: 12, borderRadius: 2, background: l.color }} />
-                        <span style={{ fontSize: 12, color: COLORS.muted }}>{l.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Monthly summary table + pie chart */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-                  {/* Monthly table */}
-                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
-                    <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Monthly Summary</h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 0 }}>
-                      {["Month", "Income", "Expenses", "Net"].map(h => (
-                        <div key={h} style={{ fontSize: 11, fontWeight: 700, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.06em", paddingBottom: 10, borderBottom: `1px solid ${COLORS.border}` }}>{h}</div>
-                      ))}
-                      {months.map((m, i) => {
-                        const profit = monthlyProfit[i];
-                        return [
-                          <div key={`${m.key}-l`} style={{ fontSize: 13, color: COLORS.textDim, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}` }}>{m.label}</div>,
-                          <div key={`${m.key}-i`} style={{ fontSize: 13, color: COLORS.accent, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600 }}>{monthlyIncome[i] > 0 ? formatCurrency(monthlyIncome[i]) : "—"}</div>,
-                          <div key={`${m.key}-e`} style={{ fontSize: 13, color: COLORS.danger, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 600 }}>{monthlyExpenses[i] > 0 ? formatCurrency(monthlyExpenses[i]) : "—"}</div>,
-                          <div key={`${m.key}-p`} style={{ fontSize: 13, color: profit >= 0 ? COLORS.accent : COLORS.danger, padding: "10px 0", borderBottom: `1px solid ${COLORS.border}`, fontWeight: 700 }}>{formatCurrency(profit)}</div>,
-                        ];
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Pie chart — expense categories */}
-                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 24 }}>
-                    <h3 style={{ margin: "0 0 18px", fontSize: 15, fontWeight: 600, color: COLORS.text }}>Expense Breakdown</h3>
-                    {total === 0 ? (
-                      <p style={{ color: COLORS.muted, fontSize: 13 }}>No expenses logged yet.</p>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-                        <svg width={140} height={140} style={{ flexShrink: 0 }}>
-                          {slices.map((sl, i) => (
-                            <path key={i} d={arcPath(70, 70, 60, sl.start, sl.end)} fill={sl.color} stroke={COLORS.card} strokeWidth={2} />
-                          ))}
-                          <circle cx={70} cy={70} r={32} fill={COLORS.card} />
-                          <text x={70} y={68} textAnchor="middle" fontSize={11} fill={COLORS.muted}>Total</text>
-                          <text x={70} y={82} textAnchor="middle" fontSize={12} fill={COLORS.text} fontWeight="bold">{formatCurrency(total)}</text>
-                        </svg>
-                        <div style={{ flex: 1 }}>
-                          {slices.map((sl, i) => (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                              <div style={{ width: 10, height: 10, borderRadius: 2, background: sl.color, flexShrink: 0 }} />
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 13, color: COLORS.text, fontWeight: 500 }}>{sl.cat}</div>
-                                <div style={{ fontSize: 11, color: COLORS.muted }}>{Math.round(sl.pct * 100)}% · {formatCurrency(sl.amt)}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+        <div style={{ borderTop:`1px solid ${COLORS.border}`, paddingTop:16, marginTop:16 }}>
+          <button onClick={() => { setEditPro(profile); setModal("profile"); }} style={{
+            display:"block", width:"100%", padding:"7px 12px", borderRadius:6,
+            border:"none", cursor:"pointer", textAlign:"left",
+            background:"transparent", color:COLORS.textDim, fontSize:13, fontFamily:"'DM Sans',sans-serif", marginBottom:4 }}>
+            👤 My Profile
+          </button>
+          <button onClick={() => { if(window.confirm("Reset to demo data?")) { setInvoices(INVOICES0); setExpenses(EXPENSES0); setAlerts(ALERTS0); }}} style={{
+            display:"block", width:"100%", padding:"7px 12px", borderRadius:6,
+            border:"none", cursor:"pointer", textAlign:"left",
+            background:"transparent", color:COLORS.muted, fontSize:12, fontFamily:"'DM Sans',sans-serif" }}>
+            ↺ Reset demo data
+          </button>
         </div>
       </div>
 
-      {/* Modals */}
-        <Modal title="New Invoice" onClose={() => setShowInvoiceModal(false)}>
-          <Input label="Client Name" value={newInvoice.client} onChange={e => setNewInvoice({ ...newInvoice, client: e.target.value })} placeholder="e.g. Acme Corp" />
-          <Input label="Amount ($)" type="number" value={newInvoice.amount} onChange={e => setNewInvoice({ ...newInvoice, amount: e.target.value })} placeholder="0.00" />
-          <Input label="Description" value={newInvoice.description} onChange={e => setNewInvoice({ ...newInvoice, description: e.target.value })} placeholder="e.g. Web redesign Q2" />
-          <Input label="Due Date" type="date" value={newInvoice.dueDate} onChange={e => setNewInvoice({ ...newInvoice, dueDate: e.target.value })} />
-          <Select label="Type" value={newInvoice.type} onChange={e => setNewInvoice({ ...newInvoice, type: e.target.value })}>
+      {/* ── Main ── */}
+      <div style={{ flex:1, padding:"32px 36px", overflowY:"auto" }}>
+
+        {/* DASHBOARD */}
+        {tab==="dashboard" && (
+          <div>
+            <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, margin:"0 0 6px" }}>Financial Overview</h1>
+            <p style={{ color:COLORS.muted, fontSize:14, marginBottom:32 }}>Your money, all in one place.</p>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:16, marginBottom:32 }}>
+              {[
+                { label:"Income Collected", value:fmt(totalIncome), color:COLORS.accent, icon:"↑" },
+                { label:"Pending Invoices", value:fmt(totalPending), color:COLORS.warning, icon:"⏳" },
+                { label:"Overdue", value:fmt(totalOverdue), color:COLORS.danger, icon:"!" },
+                { label:"Total Expenses", value:fmt(totalExp), color:"#60A5FA", icon:"↓" },
+                { label:"Net Profit", value:fmt(netProfit), color:netProfit>=0?COLORS.accent:COLORS.danger, icon:"≈" },
+              ].map((s,i) => (
+                <div key={i} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+                    <span style={{ color:COLORS.muted, fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em" }}>{s.label}</span>
+                    <span style={{ color:s.color }}>{s.icon}</span>
+                  </div>
+                  <div style={{ color:s.color, fontSize:22, fontWeight:700, fontFamily:"'Playfair Display',serif" }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:24 }}>
+                <h3 style={{ margin:"0 0 18px", fontSize:15, fontWeight:600 }}>Recent Invoices</h3>
+                {invoices.slice(-4).reverse().map(inv => (
+                  <div key={inv.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:14, marginBottom:14, borderBottom:`1px solid ${COLORS.border}` }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:600 }}>{inv.client}</div>
+                      <div style={{ fontSize:12, color:COLORS.muted }}>{inv.description}</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:14, fontWeight:700 }}>{fmt(inv.amount)}</div>
+                      <StatusPill status={inv.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:24 }}>
+                <h3 style={{ margin:"0 0 18px", fontSize:15, fontWeight:600 }}>Upcoming Payments</h3>
+                {upcoming.length===0 && <p style={{ color:COLORS.muted, fontSize:13 }}>No upcoming payments in 30 days.</p>}
+                {upcoming.map(a => (
+                  <div key={a.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:14, marginBottom:14, borderBottom:`1px solid ${COLORS.border}` }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:600 }}>{a.label}</div>
+                      <div style={{ fontSize:12, color:a.days<=3?COLORS.danger:a.days<=7?COLORS.warning:COLORS.muted }}>
+                        {a.days<=0?"Due today!":`Due in ${a.days} day${a.days===1?"":"s"}`}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:14, fontWeight:700 }}>{fmt(a.amount)}</div>
+                      <Badge type={a.type} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:24, marginTop:24 }}>
+              <h3 style={{ margin:"0 0 18px", fontSize:15, fontWeight:600 }}>Spending by Category</h3>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:12 }}>
+                {Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt]) => (
+                  <div key={cat} style={{ flex:"1 1 180px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                      <span style={{ fontSize:13, color:COLORS.textDim }}>{cat}</span>
+                      <span style={{ fontSize:13, fontWeight:600 }}>{fmt(amt)}</span>
+                    </div>
+                    <div style={{ background:COLORS.border, borderRadius:4, height:6 }}>
+                      <div style={{ width:`${Math.round(amt/totalExp*100)}%`, height:"100%", background:COLORS.accent, borderRadius:4 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* INVOICES */}
+        {tab==="invoices" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <div>
+                <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, margin:"0 0 4px" }}>Invoices</h1>
+                <p style={{ color:COLORS.muted, fontSize:14, margin:0 }}>{fInvoices.length} invoices · {fmt(fInvoices.reduce((s,i)=>s+i.amount,0))} total</p>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <Btn onClick={() => setModal("invoice")}>+ New Invoice</Btn>
+                <Btn variant="secondary" onClick={() => exportCSV("invoices",invoices,expenses)} style={{ fontSize:13 }}>⬇ CSV</Btn>
+              </div>
+            </div>
+            {profile.name==="Your Name" && (
+              <div style={{ background:"#2a1e0a", border:`1px solid ${COLORS.warning}55`, borderRadius:10, padding:"12px 16px", marginBottom:20, display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ color:COLORS.warning }}>⚠ Set up your profile so your name appears on PDF invoices.</span>
+                <button onClick={() => { setEditPro(profile); setModal("profile"); }} style={{ marginLeft:"auto", background:COLORS.warning, color:"#000", border:"none", borderRadius:6, padding:"5px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Set up →</button>
+              </div>
+            )}
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {fInvoices.map(inv => (
+                <div key={inv.id} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:"18px 22px", display:"flex", alignItems:"center", gap:16 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+                      <span style={{ fontSize:15, fontWeight:700 }}>{inv.client}</span>
+                      <Badge type={inv.type} /><StatusPill status={inv.status} />
+                    </div>
+                    <div style={{ fontSize:13, color:COLORS.muted }}>{inv.description} · Due {fmtDate(inv.dueDate)}</div>
+                  </div>
+                  <div style={{ fontSize:20, fontWeight:700, minWidth:100, textAlign:"right" }}>{fmt(inv.amount)}</div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <Btn variant="secondary" onClick={() => generatePDF(inv,profile)} style={{ padding:"7px 14px", fontSize:12, color:COLORS.accent }}>🧾 PDF</Btn>
+                    {inv.status!=="paid" && <Btn onClick={() => setInvoices(p=>p.map(x=>x.id===inv.id?{...x,status:"paid"}:x))} style={{ padding:"7px 14px", fontSize:12 }}>Mark Paid</Btn>}
+                    <Btn variant="secondary" onClick={() => setInvoices(p=>p.filter(x=>x.id!==inv.id))} style={{ padding:"7px 12px", fontSize:12, color:COLORS.danger }}>✕</Btn>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* EXPENSES */}
+        {tab==="expenses" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:28 }}>
+              <div>
+                <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, margin:"0 0 4px" }}>Expenses</h1>
+                <p style={{ color:COLORS.muted, fontSize:14, margin:0 }}>{fExpenses.length} entries · {fmt(fExpenses.reduce((s,e)=>s+e.amount,0))} total</p>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <Btn onClick={() => setModal("expense")}>+ Add Expense</Btn>
+                <Btn variant="secondary" onClick={() => exportCSV("expenses",invoices,expenses)} style={{ fontSize:13 }}>⬇ CSV</Btn>
+              </div>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {[...fExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp => (
+                <div key={exp.id} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:"14px 20px", display:"flex", alignItems:"center", gap:16 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
+                      <span style={{ fontSize:14, fontWeight:600 }}>{exp.name}</span><Badge type={exp.type} />
+                    </div>
+                    <div style={{ fontSize:12, color:COLORS.muted }}>{exp.category} · {fmtDate(exp.date)}</div>
+                  </div>
+                  <div style={{ fontSize:16, fontWeight:700, color:COLORS.danger }}>{fmt(exp.amount)}</div>
+                  <Btn variant="secondary" onClick={() => setExpenses(p=>p.filter(x=>x.id!==exp.id))} style={{ padding:"6px 10px", fontSize:12, color:COLORS.muted }}>✕</Btn>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ALERTS */}
+        {tab==="alerts" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:28 }}>
+              <div>
+                <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, margin:"0 0 4px" }}>Payment Alerts</h1>
+                <p style={{ color:COLORS.muted, fontSize:14, margin:0 }}>Never miss a due date</p>
+              </div>
+              <Btn onClick={() => setModal("alert")}>+ Add Alert</Btn>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {[...alerts].sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(a => {
+                const days = daysUntil(a.dueDate);
+                const urg = days<=3?COLORS.danger:days<=7?COLORS.warning:COLORS.textDim;
+                return (
+                  <div key={a.id} style={{ background:COLORS.card, borderRadius:12, padding:"18px 22px", border:`1px solid ${days<=7?urg+"44":COLORS.border}`, display:"flex", alignItems:"center", gap:16 }}>
+                    <div style={{ width:48, height:48, borderRadius:10, background:urg+"22", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:20 }}>
+                      {days<=0?"🔴":days<=3?"🔥":days<=7?"⚠️":"📅"}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                        <span style={{ fontSize:15, fontWeight:600 }}>{a.label}</span><Badge type={a.type} />
+                      </div>
+                      <div style={{ fontSize:13, color:urg, fontWeight:500 }}>
+                        {days<=0?"Due today!":days===1?"Due tomorrow!":`Due in ${days} days — ${fmtDate(a.dueDate)}`}
+                      </div>
+                    </div>
+                    <div style={{ fontSize:18, fontWeight:700, minWidth:80, textAlign:"right" }}>{a.amount>0?fmt(a.amount):"—"}</div>
+                    <Btn variant="secondary" onClick={() => setAlerts(p=>p.filter(x=>x.id!==a.id))} style={{ padding:"7px 12px", fontSize:12, color:COLORS.muted }}>Dismiss</Btn>
+                  </div>
+                );
+              })}
+              {alerts.length===0 && <div style={{ textAlign:"center", padding:60, color:COLORS.muted }}><div style={{ fontSize:40, marginBottom:12 }}>✓</div><p>No alerts set.</p></div>}
+            </div>
+          </div>
+        )}
+
+        {/* CHARTS */}
+        {tab==="charts" && (() => {
+          const months = Array.from({length:6},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-(5-i));return{key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`,label:d.toLocaleDateString("en-US",{month:"short",year:"2-digit"})};});
+          const mInc = months.map(m=>invoices.filter(i=>i.status==="paid"&&i.dueDate?.startsWith(m.key)).reduce((s,i)=>s+i.amount,0));
+          const mExp = months.map(m=>expenses.filter(e=>e.date?.startsWith(m.key)).reduce((s,e)=>s+e.amount,0));
+          const mNet = months.map((_,i)=>mInc[i]-mExp[i]);
+          const maxV = Math.max(...mInc,...mExp,1);
+          const H=180,bW=28,gW=bW*2+12,tW=months.length*(gW+24);
+          const catD = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+          const totCat = catD.reduce((s,[,v])=>s+v,0);
+          const PIE = ["#4ADE80","#60A5FA","#FBBF24","#F87171","#C084FC","#34D399"];
+          const p2c=(cx,cy,r,deg)=>{const rad=(deg-90)*Math.PI/180;return{x:cx+r*Math.cos(rad),y:cy+r*Math.sin(rad)};};
+          const arc=(cx,cy,r,s,e)=>{const sp=p2c(cx,cy,r,s),ep=p2c(cx,cy,r,e),l=e-s>180?1:0;return `M ${cx} ${cy} L ${sp.x} ${sp.y} A ${r} ${r} 0 ${l} 1 ${ep.x} ${ep.y} Z`;};
+          let cur=0;
+          const slices=catD.map(([cat,amt],i)=>{const pct=amt/totCat,s=cur*360;cur+=pct;return{cat,amt,pct,s,e:cur*360,color:PIE[i%PIE.length]};});
+          return (
+            <div>
+              <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, margin:"0 0 6px" }}>Trends & Insights</h1>
+              <p style={{ color:COLORS.muted, fontSize:14, marginBottom:32 }}>Last 6 months at a glance.</p>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:28, marginBottom:24 }}>
+                <h3 style={{ margin:"0 0 4px", fontSize:15, fontWeight:600 }}>Income vs Expenses</h3>
+                <p style={{ color:COLORS.muted, fontSize:12, margin:"0 0 24px" }}>Paid invoices vs logged expenses</p>
+                <div style={{ overflowX:"auto" }}>
+                  <svg width={tW+60} height={H+50}>
+                    {[0,0.25,0.5,0.75,1].map((p,i)=>{const y=H-p*H;return(<g key={i}><line x1={40} y1={y} x2={tW+60} y2={y} stroke={COLORS.border} strokeWidth={1}/><text x={36} y={y+4} fontSize={10} fill={COLORS.muted} textAnchor="end">{fmt(p*maxV)}</text></g>);})}
+                    {months.map((m,i)=>{const x=i*(gW+24)+48;const iH=(mInc[i]/maxV)*H;const eH=(mExp[i]/maxV)*H;return(<g key={m.key}><rect x={x} y={H-iH} width={bW} height={iH} fill={COLORS.accent} rx={4} opacity={0.9}/><rect x={x+bW+4} y={H-eH} width={bW} height={eH} fill={COLORS.danger} rx={4} opacity={0.8}/><text x={x+bW} y={H+18} textAnchor="middle" fontSize={11} fill={COLORS.muted}>{m.label}</text></g>);})}
+                    <polyline points={months.map((_,i)=>`${i*(gW+24)+48+bW},${H-(Math.max(0,mNet[i])/maxV)*H}`).join(" ")} fill="none" stroke={COLORS.warning} strokeWidth={2} strokeDasharray="4 2"/>
+                  </svg>
+                </div>
+                <div style={{ display:"flex", gap:20, marginTop:8 }}>
+                  {[{c:COLORS.accent,l:"Income"},{c:COLORS.danger,l:"Expenses"},{c:COLORS.warning,l:"Net profit"}].map(x=>(
+                    <div key={x.l} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <div style={{ width:12, height:12, borderRadius:2, background:x.c }}/>
+                      <span style={{ fontSize:12, color:COLORS.muted }}>{x.l}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
+                <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:24 }}>
+                  <h3 style={{ margin:"0 0 18px", fontSize:15, fontWeight:600 }}>Monthly Summary</h3>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr" }}>
+                    {["Month","Income","Expenses","Net"].map(h=><div key={h} style={{ fontSize:11, fontWeight:700, color:COLORS.muted, textTransform:"uppercase", letterSpacing:"0.06em", paddingBottom:10, borderBottom:`1px solid ${COLORS.border}` }}>{h}</div>)}
+                    {months.map((m,i)=>[
+                      <div key={m.key+"l"} style={{ fontSize:13, color:COLORS.textDim, padding:"10px 0", borderBottom:`1px solid ${COLORS.border}` }}>{m.label}</div>,
+                      <div key={m.key+"i"} style={{ fontSize:13, color:COLORS.accent, padding:"10px 0", borderBottom:`1px solid ${COLORS.border}`, fontWeight:600 }}>{mInc[i]>0?fmt(mInc[i]):"—"}</div>,
+                      <div key={m.key+"e"} style={{ fontSize:13, color:COLORS.danger, padding:"10px 0", borderBottom:`1px solid ${COLORS.border}`, fontWeight:600 }}>{mExp[i]>0?fmt(mExp[i]):"—"}</div>,
+                      <div key={m.key+"p"} style={{ fontSize:13, color:mNet[i]>=0?COLORS.accent:COLORS.danger, padding:"10px 0", borderBottom:`1px solid ${COLORS.border}`, fontWeight:700 }}>{fmt(mNet[i])}</div>,
+                    ])}
+                  </div>
+                </div>
+                <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:24 }}>
+                  <h3 style={{ margin:"0 0 18px", fontSize:15, fontWeight:600 }}>Expense Breakdown</h3>
+                  {totCat===0 ? <p style={{ color:COLORS.muted, fontSize:13 }}>No expenses logged yet.</p> : (
+                    <div style={{ display:"flex", alignItems:"center", gap:24 }}>
+                      <svg width={140} height={140} style={{ flexShrink:0 }}>
+                        {slices.map((sl,i)=><path key={i} d={arc(70,70,60,sl.s,sl.e)} fill={sl.color} stroke={COLORS.card} strokeWidth={2}/>)}
+                        <circle cx={70} cy={70} r={32} fill={COLORS.card}/>
+                        <text x={70} y={68} textAnchor="middle" fontSize={11} fill={COLORS.muted}>Total</text>
+                        <text x={70} y={83} textAnchor="middle" fontSize={12} fill={COLORS.text} fontWeight="bold">{fmt(totCat)}</text>
+                      </svg>
+                      <div style={{ flex:1 }}>
+                        {slices.map((sl,i)=>(
+                          <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+                            <div style={{ width:10, height:10, borderRadius:2, background:sl.color, flexShrink:0 }}/>
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:500 }}>{sl.cat}</div>
+                              <div style={{ fontSize:11, color:COLORS.muted }}>{Math.round(sl.pct*100)}% · {fmt(sl.amt)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── Modals ── */}
+      {modal==="invoice" && (
+        <Modal title="New Invoice" onClose={closeModal}>
+          <TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value})} placeholder="e.g. Acme Corp"/>
+          <TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/>
+          <TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/>
+          <TextInput label="Due Date" type="date" value={newInv.dueDate} onChange={e=>setNewInv({...newInv,dueDate:e.target.value})}/>
+          <SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}>
             <option value="business">Business</option><option value="personal">Personal</option>
-          </Select>
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-            <Btn variant="secondary" onClick={() => setShowInvoiceModal(false)}>Cancel</Btn>
+          </SelectInput>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="secondary" onClick={closeModal}>Cancel</Btn>
             <Btn onClick={addInvoice}>Add Invoice</Btn>
           </div>
         </Modal>
       )}
-      {showExpenseModal && (
-        <Modal title="Add Expense" onClose={() => setShowExpenseModal(false)}>
-          <Input label="Expense Name" value={newExpense.name} onChange={e => setNewExpense({ ...newExpense, name: e.target.value })} placeholder="e.g. Figma Pro" />
-          <Input label="Amount ($)" type="number" value={newExpense.amount} onChange={e => setNewExpense({ ...newExpense, amount: e.target.value })} placeholder="0.00" />
-          <Input label="Category" value={newExpense.category} onChange={e => setNewExpense({ ...newExpense, category: e.target.value })} placeholder="e.g. Software, Meals, Utilities" />
-          <Input label="Date" type="date" value={newExpense.date} onChange={e => setNewExpense({ ...newExpense, date: e.target.value })} />
-          <Select label="Type" value={newExpense.type} onChange={e => setNewExpense({ ...newExpense, type: e.target.value })}>
+
+      {modal==="expense" && (
+        <Modal title="Add Expense" onClose={closeModal}>
+          <TextInput label="Expense Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/>
+          <TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/>
+          <TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/>
+          <TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/>
+          <SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}>
             <option value="business">Business</option><option value="personal">Personal</option>
-          </Select>
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-            <Btn variant="secondary" onClick={() => setShowExpenseModal(false)}>Cancel</Btn>
+          </SelectInput>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="secondary" onClick={closeModal}>Cancel</Btn>
             <Btn onClick={addExpense}>Add Expense</Btn>
           </div>
         </Modal>
       )}
-      {showAlertModal && (
-        <Modal title="New Payment Alert" onClose={() => setShowAlertModal(false)}>
-          <Input label="Payment Label" value={newAlert.label} onChange={e => setNewAlert({ ...newAlert, label: e.target.value })} placeholder="e.g. Rent, Subscription" />
-          <Input label="Amount ($) — optional" type="number" value={newAlert.amount} onChange={e => setNewAlert({ ...newAlert, amount: e.target.value })} placeholder="0.00" />
-          <Input label="Due Date" type="date" value={newAlert.dueDate} onChange={e => setNewAlert({ ...newAlert, dueDate: e.target.value })} />
-          <Select label="Type" value={newAlert.type} onChange={e => setNewAlert({ ...newAlert, type: e.target.value })}>
+
+      {modal==="alert" && (
+        <Modal title="New Payment Alert" onClose={closeModal}>
+          <TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/>
+          <TextInput label="Amount ($) — optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/>
+          <TextInput label="Due Date" type="date" value={newAlr.dueDate} onChange={e=>setNewAlr({...newAlr,dueDate:e.target.value})}/>
+          <SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}>
             <option value="personal">Personal</option><option value="business">Business</option>
-          </Select>
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-            <Btn variant="secondary" onClick={() => setShowAlertModal(false)}>Cancel</Btn>
+          </SelectInput>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="secondary" onClick={closeModal}>Cancel</Btn>
             <Btn onClick={addAlert}>Set Alert</Btn>
           </div>
         </Modal>
       )}
-      {showProfileModal && (
-        <Modal title="My Profile" onClose={() => setShowProfileModal(false)} wide>
-          <p style={{ color: COLORS.muted, fontSize: 13, marginBottom: 20, marginTop: -8 }}>This info appears on your generated PDF invoices.</p>
-          <Input label="Full Name / Business Name" value={editProfile.name} onChange={e => setEditProfile({ ...editProfile, name: e.target.value })} placeholder="e.g. Jane Doe" />
-          <Input label="Email" value={editProfile.email} onChange={e => setEditProfile({ ...editProfile, email: e.target.value })} placeholder="e.g. jane@email.com" />
-          <Input label="Phone (optional)" value={editProfile.phone} onChange={e => setEditProfile({ ...editProfile, phone: e.target.value })} placeholder="e.g. +1 555 000 1234" />
-          <Input label="Address" value={editProfile.address} onChange={e => setEditProfile({ ...editProfile, address: e.target.value })} placeholder="e.g. New York, NY 10001" />
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-            <Btn variant="secondary" onClick={() => setShowProfileModal(false)}>Cancel</Btn>
+
+      {modal==="profile" && (
+        <Modal title="My Profile" onClose={closeModal} wide>
+          <p style={{ color:COLORS.muted, fontSize:13, marginBottom:20, marginTop:-8 }}>This info appears on your PDF invoices.</p>
+          <TextInput label="Full Name / Business Name" value={editPro.name} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="e.g. Jane Doe"/>
+          <TextInput label="Email" value={editPro.email} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="e.g. jane@email.com"/>
+          <TextInput label="Phone (optional)" value={editPro.phone} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="e.g. +1 555 000 1234"/>
+          <TextInput label="Address" value={editPro.address} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="e.g. New York, NY 10001"/>
+          <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:8 }}>
+            <Btn variant="secondary" onClick={closeModal}>Cancel</Btn>
             <Btn onClick={saveProfile}>Save Profile</Btn>
           </div>
         </Modal>
