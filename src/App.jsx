@@ -80,31 +80,68 @@ function SelectInput({ label, children, ...props }) {
 }
 function Modal({ title, onClose, children, wide=false, footer=null }) {
   const mobile = window.innerWidth < 768;
+  // Inject global style for iOS scroll fix once
+  if (!document.getElementById("modal-style")) {
+    const s = document.createElement("style");
+    s.id = "modal-style";
+    s.textContent = `.modal-scroll { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; } .modal-scroll::-webkit-scrollbar { display: none; }`;
+    document.head.appendChild(s);
+  }
   return (
-    <div onMouseDown={onClose} style={{ position:"fixed", top:0, left:0, width:"100vw", height:"100vh", background:"rgba(0,0,0,0.85)", display:"flex", alignItems: mobile ? "flex-end" : "center", justifyContent:"center", zIndex:99999, padding: mobile ? 0 : 20 }}>
-      <div onMouseDown={e=>e.stopPropagation()} style={{
-        background:C.card, border:`1px solid ${C.border}`,
-        borderRadius: mobile ? "20px 20px 0 0" : "16px",
-        width:"100%", maxWidth:wide?560:480,
-        maxHeight: mobile ? "88vh" : "90vh",
-        display:"flex", flexDirection:"column",
-        boxShadow: mobile ? "0 -20px 60px rgba(0,0,0,0.5)" : "0 25px 60px rgba(0,0,0,0.6)"
-      }}>
-        {/* Drag handle + header — fixed */}
-        <div style={{ padding:"20px 20px 0", flexShrink:0 }}>
-          {mobile && <div style={{ width:40, height:4, background:C.border, borderRadius:2, margin:"0 auto 16px" }}/>}
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+    <div
+      onMouseDown={onClose}
+      style={{
+        position:"fixed", top:0, left:0, right:0, bottom:0,
+        background:"rgba(0,0,0,0.85)",
+        display:"flex",
+        alignItems: mobile ? "flex-end" : "center",
+        justifyContent:"center",
+        zIndex:99999,
+        padding: mobile ? 0 : "20px",
+      }}
+    >
+      <div
+        onMouseDown={e=>e.stopPropagation()}
+        style={{
+          background:C.card,
+          border:`1px solid ${C.border}`,
+          borderRadius: mobile ? "20px 20px 0 0" : "16px",
+          width:"100%",
+          maxWidth: wide ? 560 : 480,
+          height: mobile ? "auto" : "auto",
+          maxHeight: mobile ? "80vh" : "85vh",
+          display:"flex",
+          flexDirection:"column",
+          boxShadow: mobile ? "0 -20px 60px rgba(0,0,0,0.6)" : "0 25px 60px rgba(0,0,0,0.6)",
+          overflow:"hidden",
+        }}
+      >
+        {/* Fixed header */}
+        <div style={{ flexShrink:0, padding:"16px 20px 0", background:C.card }}>
+          {mobile && <div style={{ width:36, height:4, background:C.border, borderRadius:2, margin:"0 auto 14px" }}/>}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
             <h3 style={{ color:C.text, fontSize:18, fontFamily:"'Playfair Display',serif", margin:0 }}>{title}</h3>
-            <button onClick={onClose} style={{ background:C.border, border:"none", color:C.text, cursor:"pointer", fontSize:14, fontWeight:700, width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
+            <button onClick={onClose} style={{ background:C.border, border:"none", color:C.text, cursor:"pointer", width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:16, fontWeight:700 }}>✕</button>
           </div>
         </div>
-        {/* Scrollable content */}
-        <div style={{ overflowY:"auto", flex:1, padding:"0 20px" }}>
+
+        {/* Scrollable body */}
+        <div
+          className="modal-scroll"
+          style={{ flex:1, overflowY:"scroll", padding:"16px 20px", minHeight:0 }}
+        >
           {children}
         </div>
-        {/* Sticky footer with buttons */}
+
+        {/* Fixed footer — always visible */}
         {footer && (
-          <div style={{ padding:"16px 20px", paddingBottom: mobile ? "calc(16px + env(safe-area-inset-bottom))" : "20px", borderTop:`1px solid ${C.border}`, flexShrink:0, background:C.card }}>
+          <div style={{
+            flexShrink:0,
+            padding:"14px 20px",
+            paddingBottom: mobile ? "calc(14px + env(safe-area-inset-bottom, 0px))" : "16px",
+            borderTop:`1px solid ${C.border}`,
+            background:C.card,
+          }}>
             {footer}
           </div>
         )}
