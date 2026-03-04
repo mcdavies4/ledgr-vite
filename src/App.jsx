@@ -56,7 +56,7 @@ const StatusPill = ({ status }) => {
 };
 
 const Modal = ({ title, onClose, children, wide }) => (
-  <div onClick={onClose} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
+  <div onClick={onClose} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "20px" }}>
     <div onClick={e => e.stopPropagation()} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: 32, width: "100%", maxWidth: wide ? 520 : 420, boxShadow: "0 25px 60px rgba(0,0,0,0.5)", maxHeight: "calc(100vh - 40px)", overflowY: "auto", position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h3 style={{ color: COLORS.text, fontSize: 18, fontFamily: "'Playfair Display', serif", margin: 0 }}>{title}</h3>
@@ -247,7 +247,7 @@ export default function App() {
       <div style={{ display: "flex", minHeight: "100vh" }}>
 
         {/* Sidebar */}
-        <div style={{ width: 220, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`, padding: "28px 16px", display: "flex", flexDirection: "column", flexShrink: 0, position: "sticky", top: 0, height: "100vh" }}>
+        <div style={{ width: 220, background: COLORS.surface, borderRight: `1px solid ${COLORS.border}`, padding: "28px 16px", display: "flex", flexDirection: "column", flexShrink: 0, position: "sticky", top: 0, height: "100vh", zIndex: 1 }}>
           <div style={{ marginBottom: 36 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <div style={{ width: 32, height: 32, background: COLORS.accent, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center" }}>
