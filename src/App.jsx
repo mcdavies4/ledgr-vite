@@ -393,10 +393,12 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
-  const [bankAccounts, setBankAccounts] = useState([]);
-  const [bankTransactions, setBankTransactions] = useState([]);
-  const [bankLoading, setBankLoading] = useState(false);
-  const [syncingBank, setSyncingBank] = useState(null);
+
+  const [csvRows, setCsvRows] = useState([]);
+  const [csvParsing, setCsvParsing] = useState(false);
+  const [csvMappings, setCsvMappings] = useState({ date:"", description:"", amount:"", type:"debit" });
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [csvStep, setCsvStep] = useState(1); // 1=upload, 2=map columns, 3=review
   const [newClient, setNewClient] = useState({ name:"", email:"", phone:"", company:"", address:"", notes:"" });
   const [editClient, setEditClient] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -447,21 +449,18 @@ export default function App() {
     setLoading(true);
     const uid = session?.user?.id;
     if (!uid) return;
-    const [inv, exp, alr, pro, cli, bnk, btx] = await Promise.all([
+    const [inv, exp, alr, pro, cli] = await Promise.all([
       supabase.from("invoices").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("expenses").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("alerts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("clients").select("*").eq("user_id",uid).order("name",{ascending:true}),
-      supabase.from("bank_accounts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
-      supabase.from("bank_transactions").select("*").eq("user_id",uid).order("date",{ascending:false}).limit(200),
+
       supabase.from("profiles").select("*").eq("id",uid).single(),
     ]);
     if (inv.data) setInvoices(inv.data);
     if (exp.data) setExpenses(exp.data);
     if (alr.data) setAlerts(alr.data);
     if (cli.data) setClients(cli.data);
-    if (bnk.data) setBankAccounts(bnk.data);
-    if (btx.data) setBankTransactions(btx.data);
     if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
     else {
       // First login — create profile with trial
@@ -499,83 +498,63 @@ export default function App() {
   const SUPABASE_URL = "https://phjybvphmlzghdebonzy.supabase.co";
   const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoanlidnBobWx6Z2hkZWJvbnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTI2MDIsImV4cCI6MjA4ODE2ODYwMn0.6r7C6aQPn0YTjmDjRkP8fVd6cQhXJ_L1jBYqsu2qRWM";
 
-  const callEdge = async (fn, body) => {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
-      body: JSON.stringify(body),
+  // ── CSV Import ──
+  const handleCsvUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCsvParsing(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      const lines = text.split(/
+?
+/).filter(l => l.trim());
+      if (lines.length < 2) { alert("CSV appears empty."); setCsvParsing(false); return; }
+      // Parse headers
+      const headers = lines[0].split(",").map(h => h.replace(/^"|"$/g,"").trim());
+      setCsvHeaders(headers);
+      // Parse rows
+      const rows = lines.slice(1).map(line => {
+        const vals = line.match(/(".*?"|[^,]+)(?=,|$)/g) || line.split(",");
+        const row = {};
+        headers.forEach((h,i) => { row[h] = (vals[i]||"").replace(/^"|"$/g,"").trim(); });
+        return row;
+      }).filter(r => Object.values(r).some(v => v));
+      setCsvRows(rows);
+      // Auto-detect common column names
+      const lower = headers.map(h => h.toLowerCase());
+      const dateCol = headers[lower.findIndex(h => h.includes("date"))] || "";
+      const descCol = headers[lower.findIndex(h => h.includes("desc") || h.includes("name") || h.includes("merchant") || h.includes("detail"))] || "";
+      const amtCol = headers[lower.findIndex(h => h.includes("amount") || h.includes("debit") || h.includes("credit") || h.includes("value"))] || "";
+      setCsvMappings({ date: dateCol, description: descCol, amount: amtCol, type:"debit" });
+      setCsvStep(2);
+      setCsvParsing(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const importCsvTransactions = async () => {
+    const { date: dateCol, description: descCol, amount: amtCol } = csvMappings;
+    if (!dateCol || !descCol || !amtCol) { alert("Please map all columns first."); return; }
+    const toImport = csvRows.filter(r => {
+      const amt = parseFloat((r[amtCol]||"").replace(/[^0-9.-]/g,""));
+      return !isNaN(amt) && amt > 0;
     });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    return data;
-  };
-
-  const connectBank = async () => {
-    setBankLoading(true);
-    try {
-      if (!window.Plaid) {
-        alert("Plaid not loaded. Please refresh the page and try again.");
-        setBankLoading(false);
-        return;
-      }
-      // Get link token
-      let linkToken;
-      try {
-        const result = await callEdge("plaid-create-link-token", { user_id: session.user.id });
-        linkToken = result.link_token;
-      } catch(e) {
-        alert("Could not get link token: " + e.message + "\n\nCheck that PLAID_CLIENT_ID and PLAID_SECRET are set correctly in Supabase Edge Function secrets.");
-        setBankLoading(false);
-        return;
-      }
-
-      // Open Plaid Link
-      const handler = window.Plaid.create({
-        token: linkToken,
-        onSuccess: async (public_token, metadata) => {
-          try {
-            await callEdge("plaid-exchange-token", {
-              public_token,
-              user_id: session.user.id,
-              institution: metadata.institution,
-            });
-            await loadAll();
-          } catch(e) { alert("Failed to save bank connection: " + e.message); }
-        },
-        onExit: (err) => {
-          if (err) console.error("Plaid exit error:", err);
-        },
-        onEvent: (eventName) => console.log("Plaid event:", eventName),
-      });
-      handler.open();
-    } catch(e) { alert("Unexpected error: " + e.message); }
-    setBankLoading(false);
-  };
-
-  const syncTransactions = async (bankAccount) => {
-    setSyncingBank(bankAccount.id);
-    try {
-      const { count } = await callEdge("plaid-sync-transactions", {
-        user_id: session.user.id,
-        bank_account_id: bankAccount.id,
-        access_token: bankAccount.plaid_access_token,
-      });
-      await loadAll();
-      alert(`Synced ${count} transactions`);
-    } catch(e) { alert("Sync failed: " + e.message); }
-    setSyncingBank(null);
-  };
-
-  const importToExpenses = async (tx) => {
-    const row = { name:tx.name, amount:tx.amount, category:tx.category, date:tx.date, type:"business", user_id:session.user.id };
-    const { data } = await supabase.from("expenses").insert(row).select().single();
-    if (data) { setExpenses(p=>[data,...p]); alert(`"${tx.name}" added to expenses!`); }
-  };
-
-  const disconnectBank = async (id) => {
-    if (!confirm("Disconnect this bank account? Transactions will be kept.")) return;
-    await supabase.from("bank_accounts").delete().eq("id",id);
-    setBankAccounts(p=>p.filter(x=>x.id!==id));
+    if (toImport.length === 0) { alert("No valid transactions found."); return; }
+    const rows = toImport.map(r => ({
+      name: r[descCol] || "Transaction",
+      amount: Math.abs(parseFloat((r[amtCol]||"0").replace(/[^0-9.-]/g,""))),
+      category: "Bank Import",
+      date: r[dateCol] || new Date().toISOString().split("T")[0],
+      type: "business",
+      user_id: session.user.id,
+    }));
+    const { data } = await supabase.from("expenses").insert(rows).select();
+    if (data) {
+      setExpenses(p => [...data, ...p]);
+      alert(`✅ Imported ${data.length} transactions as expenses!`);
+      setCsvStep(1); setCsvRows([]); setCsvHeaders([]); close();
+    }
   };
 
   const addClient = async () => {
@@ -947,92 +926,29 @@ export default function App() {
 
               {tab==="bank"&&(
                 <div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
-                    <div>
-                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Bank Accounts</h1>
-                      <p style={{color:C.muted,fontSize:13,margin:0}}>Connect your bank to auto-import transactions</p>
-                    </div>
-                    <Btn onClick={connectBank} disabled={bankLoading} style={{padding:"10px 14px",fontSize:13,flexShrink:0}}>
-                      {bankLoading?"Connecting...":"+ Connect Bank"}
-                    </Btn>
+                  <div style={{marginBottom:20}}>
+                    <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Bank & Transactions</h1>
+                    <p style={{color:C.muted,fontSize:13,margin:0}}>Import transactions from your bank statement</p>
                   </div>
 
-                  {/* Sandbox notice */}
-                  <div style={{background:"#1e2d1a",border:"1px solid #4ADE8044",borderRadius:10,padding:"12px 16px",marginBottom:20,fontSize:13,color:C.accent}}>
-                    🧪 <strong>Sandbox mode</strong> — Use test credentials: username <code style={{background:"#0d2218",padding:"1px 6px",borderRadius:4}}>user_good</code> password <code style={{background:"#0d2218",padding:"1px 6px",borderRadius:4}}>pass_good</code>
+                  {/* Two import options */}
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:24}}>
+                    <div style={{background:C.card,border:`1px solid ${C.accent}44`,borderRadius:12,padding:20}}>
+                      <div style={{fontSize:24,marginBottom:10}}>📄</div>
+                      <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>CSV Import</div>
+                      <p style={{fontSize:13,color:C.textDim,marginBottom:16,lineHeight:1.6}}>Download your bank statement as CSV and upload it. Works with every bank worldwide.</p>
+                      <Btn onClick={()=>setModal("csv-import")} style={{width:"100%",padding:"10px",fontSize:13}}>Upload CSV</Btn>
+                    </div>
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,opacity:0.6}}>
+                      <div style={{fontSize:24,marginBottom:10}}>🔗</div>
+                      <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Auto Sync <span style={{fontSize:10,background:C.border,padding:"2px 7px",borderRadius:4,color:C.muted,fontWeight:600,marginLeft:4}}>COMING SOON</span></div>
+                      <p style={{fontSize:13,color:C.textDim,marginBottom:16,lineHeight:1.6}}>Connect your bank directly for automatic transaction sync. US & UK banks supported.</p>
+                      <Btn disabled style={{width:"100%",padding:"10px",fontSize:13}}>Coming Soon</Btn>
+                    </div>
                   </div>
 
                   {/* Connected accounts */}
-                  {bankAccounts.length===0 ? (
-                    <div style={{textAlign:"center",padding:60,color:C.muted}}>
-                      <div style={{fontSize:48,marginBottom:16}}>🏦</div>
-                      <p style={{fontSize:15,marginBottom:8,color:C.textDim}}>No bank accounts connected</p>
-                      <p style={{fontSize:13}}>Connect your bank to automatically import transactions as expenses.</p>
-                    </div>
-                  ) : (
-                    <div>
-                      {bankAccounts.map(ba=>(
-                        <div key={ba.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-                            <div>
-                              <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>{ba.institution_name}</div>
-                              <div style={{fontSize:12,color:C.muted}}>Connected · {ba.accounts?.length||0} account{ba.accounts?.length!==1?"s":""}</div>
-                            </div>
-                            <div style={{display:"flex",gap:8}}>
-                              <Btn onClick={()=>syncTransactions(ba)} disabled={syncingBank===ba.id} style={{padding:"8px 12px",fontSize:12}}>
-                                {syncingBank===ba.id?"Syncing...":"↻ Sync"}
-                              </Btn>
-                              <Btn variant="danger" onClick={()=>disconnectBank(ba.id)} style={{padding:"8px 12px",fontSize:12}}>Disconnect</Btn>
-                            </div>
-                          </div>
-                          {/* Account cards */}
-                          {ba.accounts?.map((acc,i)=>(
-                            <div key={i} style={{background:C.surface,borderRadius:8,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                              <div>
-                                <div style={{fontSize:13,fontWeight:600}}>{acc.name} •••• {acc.mask}</div>
-                                <div style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>{acc.subtype}</div>
-                              </div>
-                              <div style={{fontSize:15,fontWeight:700,color:C.accent}}>{money(acc.balance||0, profile?.currency)}</div>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-
-                      {/* Transactions */}
-                      <div style={{marginTop:8}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                          <h3 style={{fontSize:15,fontWeight:600,margin:0}}>Recent Transactions</h3>
-                          <span style={{fontSize:12,color:C.muted}}>{bankTransactions.filter(t=>!t.pending).length} transactions</span>
-                        </div>
-                        {bankTransactions.length===0&&<p style={{color:C.muted,fontSize:13}}>No transactions yet — click Sync to import.</p>}
-                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                          {bankTransactions.filter(t=>!t.pending).slice(0,50).map(tx=>(
-                            <div key={tx.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
-                              <div style={{width:36,height:36,borderRadius:8,background:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
-                                {tx.category==="Meals"?"🍽":tx.category==="Travel"?"✈":tx.category==="Shopping"?"🛍":tx.category==="Software"?"💻":tx.category==="Health"?"💊":"💳"}
-                              </div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontSize:13,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.name}</div>
-                                <div style={{fontSize:11,color:C.muted}}>{tx.category} · {tx.account_name} · {tx.date?fmtDate(tx.date):"—"}</div>
-                              </div>
-                              <div style={{textAlign:"right",flexShrink:0}}>
-                                <div style={{fontSize:14,fontWeight:700,color:C.danger,marginBottom:4}}>{money(tx.amount,profile?.currency)}</div>
-                                <button onClick={()=>importToExpenses(tx)} style={{background:C.accentDim,border:"none",color:C.accent,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Expense</button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {bankTransactions.filter(t=>t.pending).length>0&&(
-                          <div style={{marginTop:16}}>
-                            <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Pending</div>
-                            {bankTransactions.filter(t=>t.pending).map(tx=>(
-                              <div key={tx.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,opacity:0.6}}>
-                                <div><div style={{fontSize:13,fontWeight:600}}>{tx.name}</div><div style={{fontSize:11,color:C.muted}}>Pending · {tx.date}</div></div>
-                                <div style={{fontSize:14,fontWeight:700,color:C.muted}}>{money(tx.amount,profile?.currency)}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                  
                       </div>
                     </div>
                   )}
@@ -1114,7 +1030,81 @@ export default function App() {
 </Modal>)}
       {modal==="expense"&&(<Modal title="Add Expense" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div>}><TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/><TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/><TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/><TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/><SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Modal>)}
       {modal==="alert"&&(<Modal title="New Alert" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addAlert} style={{flex:1}}>Set Alert</Btn></div>}><TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/><TextInput label="Amount ($) optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/><TextInput label="Due Date" type="date" value={newAlr.due_date} onChange={e=>setNewAlr({...newAlr,due_date:e.target.value})}/><SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}><option value="personal">Personal</option><option value="business">Business</option></SelectInput></Modal>)}
-      {modal==="add-client"&&(<Modal title="New Client" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addClient} style={{flex:1}}>Save Client</Btn></div>}>
+      {modal==="csv-import"&&(
+  <Modal title="Import Bank Statement" onClose={()=>{close();setCsvStep(1);setCsvRows([]);setCsvHeaders([]);}}
+    footer={
+      csvStep===2 ? <div style={{display:"flex",gap:10}}>
+        <Btn variant="secondary" onClick={()=>setCsvStep(1)} style={{flex:1}}>Back</Btn>
+        <Btn onClick={()=>setCsvStep(3)} disabled={!csvMappings.date||!csvMappings.description||!csvMappings.amount} style={{flex:1}}>Preview →</Btn>
+      </div>
+      : csvStep===3 ? <div style={{display:"flex",gap:10}}>
+        <Btn variant="secondary" onClick={()=>setCsvStep(2)} style={{flex:1}}>Back</Btn>
+        <Btn onClick={importCsvTransactions} style={{flex:1}}>Import {csvRows.filter(r=>{const a=parseFloat((r[csvMappings.amount]||"").replace(/[^0-9.-]/g,""));return !isNaN(a)&&a>0;}).length} Transactions</Btn>
+      </div>
+      : null
+    }
+  >
+    {csvStep===1&&(
+      <div>
+        <div style={{background:C.surface,borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:C.textDim,lineHeight:1.7}}>
+          <strong style={{color:C.text,display:"block",marginBottom:8}}>How to export your bank statement:</strong>
+          🇬🇧 <strong>UK banks:</strong> Barclays, HSBC, Lloyds, Monzo, Revolut — go to Transactions → Export → CSV<br/>
+          🇺🇸 <strong>US banks:</strong> Chase, Bank of America, Wells Fargo — go to Statements → Download → CSV
+        </div>
+        <label style={{display:"block",background:C.accentDim,border:`2px dashed ${C.accent}44`,borderRadius:12,padding:"32px 20px",textAlign:"center",cursor:"pointer"}}>
+          <div style={{fontSize:32,marginBottom:8}}>📂</div>
+          <div style={{fontSize:14,fontWeight:600,color:C.accent,marginBottom:4}}>Click to upload CSV file</div>
+          <div style={{fontSize:12,color:C.muted}}>Supports .csv files from any bank</div>
+          <input type="file" accept=".csv" onChange={handleCsvUpload} style={{display:"none"}}/>
+        </label>
+        {csvParsing&&<div style={{textAlign:"center",padding:20,color:C.muted,fontSize:13}}>Parsing CSV...</div>}
+      </div>
+    )}
+    {csvStep===2&&csvHeaders.length>0&&(
+      <div>
+        <p style={{fontSize:13,color:C.textDim,marginBottom:16}}>Map your CSV columns so Ledgr knows what each column means. Found <strong style={{color:C.text}}>{csvRows.length} rows</strong>.</p>
+        {[{key:"date",label:"Date column"},{key:"description",label:"Description / Merchant"},{key:"amount",label:"Amount column"}].map(({key,label})=>(
+          <SelectInput key={key} label={label} value={csvMappings[key]} onChange={e=>setCsvMappings({...csvMappings,[key]:e.target.value})}>
+            <option value="">— Select column —</option>
+            {csvHeaders.map(h=><option key={h} value={h}>{h}</option>)}
+          </SelectInput>
+        ))}
+        <div style={{background:C.surface,borderRadius:8,padding:12,fontSize:12,color:C.muted}}>
+          <strong style={{color:C.textDim,display:"block",marginBottom:6}}>Preview (first 3 rows):</strong>
+          {csvRows.slice(0,3).map((r,i)=>(
+            <div key={i} style={{marginBottom:4,padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+              {csvMappings.date&&<span style={{marginRight:12}}>{r[csvMappings.date]}</span>}
+              {csvMappings.description&&<span style={{marginRight:12,color:C.textDim}}>{r[csvMappings.description]?.slice(0,30)}</span>}
+              {csvMappings.amount&&<span style={{color:C.accent}}>£/${r[csvMappings.amount]}</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+    {csvStep===3&&(
+      <div>
+        <p style={{fontSize:13,color:C.textDim,marginBottom:12}}>These transactions will be added to your <strong style={{color:C.text}}>Expenses</strong>. Review before importing:</p>
+        <div style={{maxHeight:320,overflowY:"auto"}}>
+          {csvRows.filter(r=>{const a=parseFloat((r[csvMappings.amount]||"").replace(/[^0-9.-]/g,""));return !isNaN(a)&&a>0;}).slice(0,20).map((r,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+              <div>
+                <div style={{fontWeight:600,marginBottom:2}}>{(r[csvMappings.description]||"Transaction").slice(0,35)}</div>
+                <div style={{fontSize:11,color:C.muted}}>{r[csvMappings.date]}</div>
+              </div>
+              <div style={{fontWeight:700,color:C.danger}}>
+                {money(Math.abs(parseFloat((r[csvMappings.amount]||"0").replace(/[^0-9.-]/g,""))),profile?.currency)}
+              </div>
+            </div>
+          ))}
+          {csvRows.filter(r=>{const a=parseFloat((r[csvMappings.amount]||"").replace(/[^0-9.-]/g,""));return !isNaN(a)&&a>0;}).length > 20 &&
+            <p style={{color:C.muted,fontSize:12,padding:"10px 0",textAlign:"center"}}>...and {csvRows.filter(r=>{const a=parseFloat((r[csvMappings.amount]||"").replace(/[^0-9.-]/g,""));return !isNaN(a)&&a>0;}).length - 20} more</p>
+          }
+        </div>
+      </div>
+    )}
+  </Modal>
+)}
+{modal==="add-client"&&(<Modal title="New Client" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addClient} style={{flex:1}}>Save Client</Btn></div>}>
   <TextInput label="Full Name" value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} placeholder="Jane Smith"/>
   <TextInput label="Company (optional)" value={newClient.company} onChange={e=>setNewClient({...newClient,company:e.target.value})} placeholder="Acme Corp"/>
   <TextInput label="Email" value={newClient.email} onChange={e=>setNewClient({...newClient,email:e.target.value})} placeholder="jane@acme.com"/>
