@@ -393,6 +393,10 @@ export default function App() {
   const [alerts, setAlerts] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [bankTransactions, setBankTransactions] = useState([]);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [syncingBank, setSyncingBank] = useState(null);
   const [newClient, setNewClient] = useState({ name:"", email:"", phone:"", company:"", address:"", notes:"" });
   const [editClient, setEditClient] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -443,17 +447,21 @@ export default function App() {
     setLoading(true);
     const uid = session?.user?.id;
     if (!uid) return;
-    const [inv, exp, alr, pro, cli] = await Promise.all([
+    const [inv, exp, alr, pro, cli, bnk, btx] = await Promise.all([
       supabase.from("invoices").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("expenses").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("alerts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("clients").select("*").eq("user_id",uid).order("name",{ascending:true}),
+      supabase.from("bank_accounts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
+      supabase.from("bank_transactions").select("*").eq("user_id",uid).order("date",{ascending:false}).limit(200),
       supabase.from("profiles").select("*").eq("id",uid).single(),
     ]);
     if (inv.data) setInvoices(inv.data);
     if (exp.data) setExpenses(exp.data);
     if (alr.data) setAlerts(alr.data);
     if (cli.data) setClients(cli.data);
+    if (bnk.data) setBankAccounts(bnk.data);
+    if (btx.data) setBankTransactions(btx.data);
     if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
     else {
       // First login — create profile with trial
@@ -486,6 +494,81 @@ export default function App() {
   const delInvoice = async (id) => { await supabase.from("invoices").delete().eq("id",id); setInvoices(p=>p.filter(x=>x.id!==id)); };
   const delExpense = async (id) => { await supabase.from("expenses").delete().eq("id",id); setExpenses(p=>p.filter(x=>x.id!==id)); };
   const delAlert   = async (id) => { await supabase.from("alerts").delete().eq("id",id); setAlerts(p=>p.filter(x=>x.id!==id)); };
+
+  // ── Bank functions ──
+  const SUPABASE_URL = "https://phjybvphmlzghdebonzy.supabase.co";
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoanlidnBobWx6Z2hkZWJvbnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTI2MDIsImV4cCI6MjA4ODE2ODYwMn0.6r7C6aQPn0YTjmDjRkP8fVd6cQhXJ_L1jBYqsu2qRWM";
+
+  const callEdge = async (fn, body) => {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data;
+  };
+
+  const connectBank = async () => {
+    setBankLoading(true);
+    try {
+      // Get link token
+      const { link_token } = await callEdge("plaid-create-link-token", { user_id: session.user.id });
+
+      // Load Plaid Link SDK
+      await new Promise((resolve, reject) => {
+        if (window.Plaid) { resolve(null); return; }
+        const s = document.createElement("script");
+        s.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+
+      // Open Plaid Link
+      window.Plaid.create({
+        token: link_token,
+        onSuccess: async (public_token, metadata) => {
+          try {
+            await callEdge("plaid-exchange-token", {
+              public_token,
+              user_id: session.user.id,
+              institution: metadata.institution,
+            });
+            await loadAll();
+          } catch(e) { alert("Failed to connect bank: " + e.message); }
+        },
+        onExit: () => {},
+      }).open();
+    } catch(e) { alert("Failed to start bank connection: " + e.message); }
+    setBankLoading(false);
+  };
+
+  const syncTransactions = async (bankAccount) => {
+    setSyncingBank(bankAccount.id);
+    try {
+      const { count } = await callEdge("plaid-sync-transactions", {
+        user_id: session.user.id,
+        bank_account_id: bankAccount.id,
+        access_token: bankAccount.plaid_access_token,
+      });
+      await loadAll();
+      alert(`Synced ${count} transactions`);
+    } catch(e) { alert("Sync failed: " + e.message); }
+    setSyncingBank(null);
+  };
+
+  const importToExpenses = async (tx) => {
+    const row = { name:tx.name, amount:tx.amount, category:tx.category, date:tx.date, type:"business", user_id:session.user.id };
+    const { data } = await supabase.from("expenses").insert(row).select().single();
+    if (data) { setExpenses(p=>[data,...p]); alert(`"${tx.name}" added to expenses!`); }
+  };
+
+  const disconnectBank = async (id) => {
+    if (!confirm("Disconnect this bank account? Transactions will be kept.")) return;
+    await supabase.from("bank_accounts").delete().eq("id",id);
+    setBankAccounts(p=>p.filter(x=>x.id!==id));
+  };
 
   const addClient = async () => {
     if (!newClient.name) return;
@@ -550,7 +633,7 @@ export default function App() {
   if (!session) return <AuthScreen/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"charts",label:"Charts"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const SidebarContent=()=>(
@@ -848,6 +931,100 @@ export default function App() {
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab==="bank"&&(
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
+                    <div>
+                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Bank Accounts</h1>
+                      <p style={{color:C.muted,fontSize:13,margin:0}}>Connect your bank to auto-import transactions</p>
+                    </div>
+                    <Btn onClick={connectBank} disabled={bankLoading} style={{padding:"10px 14px",fontSize:13,flexShrink:0}}>
+                      {bankLoading?"Connecting...":"+ Connect Bank"}
+                    </Btn>
+                  </div>
+
+                  {/* Sandbox notice */}
+                  <div style={{background:"#1e2d1a",border:"1px solid #4ADE8044",borderRadius:10,padding:"12px 16px",marginBottom:20,fontSize:13,color:C.accent}}>
+                    🧪 <strong>Sandbox mode</strong> — Use test credentials: username <code style={{background:"#0d2218",padding:"1px 6px",borderRadius:4}}>user_good</code> password <code style={{background:"#0d2218",padding:"1px 6px",borderRadius:4}}>pass_good</code>
+                  </div>
+
+                  {/* Connected accounts */}
+                  {bankAccounts.length===0 ? (
+                    <div style={{textAlign:"center",padding:60,color:C.muted}}>
+                      <div style={{fontSize:48,marginBottom:16}}>🏦</div>
+                      <p style={{fontSize:15,marginBottom:8,color:C.textDim}}>No bank accounts connected</p>
+                      <p style={{fontSize:13}}>Connect your bank to automatically import transactions as expenses.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      {bankAccounts.map(ba=>(
+                        <div key={ba.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                            <div>
+                              <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>{ba.institution_name}</div>
+                              <div style={{fontSize:12,color:C.muted}}>Connected · {ba.accounts?.length||0} account{ba.accounts?.length!==1?"s":""}</div>
+                            </div>
+                            <div style={{display:"flex",gap:8}}>
+                              <Btn onClick={()=>syncTransactions(ba)} disabled={syncingBank===ba.id} style={{padding:"8px 12px",fontSize:12}}>
+                                {syncingBank===ba.id?"Syncing...":"↻ Sync"}
+                              </Btn>
+                              <Btn variant="danger" onClick={()=>disconnectBank(ba.id)} style={{padding:"8px 12px",fontSize:12}}>Disconnect</Btn>
+                            </div>
+                          </div>
+                          {/* Account cards */}
+                          {ba.accounts?.map((acc,i)=>(
+                            <div key={i} style={{background:C.surface,borderRadius:8,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                              <div>
+                                <div style={{fontSize:13,fontWeight:600}}>{acc.name} •••• {acc.mask}</div>
+                                <div style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>{acc.subtype}</div>
+                              </div>
+                              <div style={{fontSize:15,fontWeight:700,color:C.accent}}>{money(acc.balance||0, profile?.currency)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+
+                      {/* Transactions */}
+                      <div style={{marginTop:8}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                          <h3 style={{fontSize:15,fontWeight:600,margin:0}}>Recent Transactions</h3>
+                          <span style={{fontSize:12,color:C.muted}}>{bankTransactions.filter(t=>!t.pending).length} transactions</span>
+                        </div>
+                        {bankTransactions.length===0&&<p style={{color:C.muted,fontSize:13}}>No transactions yet — click Sync to import.</p>}
+                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                          {bankTransactions.filter(t=>!t.pending).slice(0,50).map(tx=>(
+                            <div key={tx.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+                              <div style={{width:36,height:36,borderRadius:8,background:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
+                                {tx.category==="Meals"?"🍽":tx.category==="Travel"?"✈":tx.category==="Shopping"?"🛍":tx.category==="Software"?"💻":tx.category==="Health"?"💊":"💳"}
+                              </div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tx.name}</div>
+                                <div style={{fontSize:11,color:C.muted}}>{tx.category} · {tx.account_name} · {tx.date?fmtDate(tx.date):"—"}</div>
+                              </div>
+                              <div style={{textAlign:"right",flexShrink:0}}>
+                                <div style={{fontSize:14,fontWeight:700,color:C.danger,marginBottom:4}}>{money(tx.amount,profile?.currency)}</div>
+                                <button onClick={()=>importToExpenses(tx)} style={{background:C.accentDim,border:"none",color:C.accent,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:11,fontWeight:600}}>+ Expense</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {bankTransactions.filter(t=>t.pending).length>0&&(
+                          <div style={{marginTop:16}}>
+                            <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Pending</div>
+                            {bankTransactions.filter(t=>t.pending).map(tx=>(
+                              <div key={tx.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,opacity:0.6}}>
+                                <div><div style={{fontSize:13,fontWeight:600}}>{tx.name}</div><div style={{fontSize:11,color:C.muted}}>Pending · {tx.date}</div></div>
+                                <div style={{fontSize:14,fontWeight:700,color:C.muted}}>{money(tx.amount,profile?.currency)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
