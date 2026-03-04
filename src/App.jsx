@@ -51,13 +51,23 @@ function SelectInput({ label, children, ...props }) {
   );
 }
 function Modal({ title, onClose, children, wide=false }) {
+  const mobile = window.innerWidth < 768;
   return (
-    <div onMouseDown={onClose} style={{ position:"fixed", top:0, left:0, width:"100vw", height:"100vh", background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:99999 }}>
-      <div onMouseDown={e=>e.stopPropagation()} style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:"20px 20px 0 0", padding:"24px 20px 36px", width:"100%", maxWidth:wide?560:480, maxHeight:"92vh", overflowY:"auto", boxShadow:"0 -20px 60px rgba(0,0,0,0.5)" }}>
-        <div style={{ width:40, height:4, background:C.border, borderRadius:2, margin:"0 auto 20px" }}/>
+    <div onMouseDown={onClose} style={{ position:"fixed", top:0, left:0, width:"100vw", height:"100vh", background:"rgba(0,0,0,0.85)", display:"flex", alignItems: mobile ? "flex-end" : "center", justifyContent:"center", zIndex:99999, padding: mobile ? 0 : 20 }}>
+      <div onMouseDown={e=>e.stopPropagation()} style={{
+        background:C.card, border:`1px solid ${C.border}`,
+        borderRadius: mobile ? "20px 20px 0 0" : "16px",
+        padding:"24px 20px",
+        paddingBottom: mobile ? "calc(24px + env(safe-area-inset-bottom))" : "24px",
+        width:"100%", maxWidth:wide?560:480,
+        maxHeight: mobile ? "85vh" : "90vh",
+        overflowY:"auto",
+        boxShadow: mobile ? "0 -20px 60px rgba(0,0,0,0.5)" : "0 25px 60px rgba(0,0,0,0.6)"
+      }}>
+        {mobile && <div style={{ width:40, height:4, background:C.border, borderRadius:2, margin:"0 auto 20px" }}/>}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
           <h3 style={{ color:C.text, fontSize:18, fontFamily:"'Playfair Display',serif", margin:0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background:C.border, border:"none", color:C.text, cursor:"pointer", fontSize:14, fontWeight:700, width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>X</button>
+          <button onClick={onClose} style={{ background:C.border, border:"none", color:C.text, cursor:"pointer", fontSize:14, fontWeight:700, width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>✕</button>
         </div>
         {children}
       </div>
