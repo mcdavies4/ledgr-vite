@@ -454,9 +454,8 @@ export default function App() {
       supabase.from("invoices").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("expenses").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
       supabase.from("alerts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
-      supabase.from("clients").select("*").eq("user_id",uid).order("name",{ascending:true}),
-
       supabase.from("profiles").select("*").eq("id",uid).single(),
+      supabase.from("clients").select("*").eq("user_id",uid).order("name",{ascending:true}),
     ]);
     if (inv.data) setInvoices(inv.data);
     if (exp.data) setExpenses(exp.data);
@@ -814,6 +813,7 @@ export default function App() {
 
               {tab==="clients"&&(
                 <div>
+                  {clientsError&&<div style={{background:"#3a1a1a",border:"1px solid #f8717144",borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:"#f87171"}}>Error: {clientsError}</div>}
                   {selectedClient ? (
                     // ── Client detail view ──
                     <div>
