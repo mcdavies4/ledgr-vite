@@ -399,6 +399,7 @@ export default function App() {
   const [csvMappings, setCsvMappings] = useState({ date:"", description:"", amount:"", type:"debit" });
   const [csvHeaders, setCsvHeaders] = useState([]);
   const [csvStep, setCsvStep] = useState(1); // 1=upload, 2=map columns, 3=review
+  const [clientsError, setClientsError] = useState(null);
   const [newClient, setNewClient] = useState({ name:"", email:"", phone:"", company:"", address:"", notes:"" });
   const [editClient, setEditClient] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -460,7 +461,9 @@ export default function App() {
     if (inv.data) setInvoices(inv.data);
     if (exp.data) setExpenses(exp.data);
     if (alr.data) setAlerts(alr.data);
-    if (cli.data) setClients(cli.data); else setClients([]);
+    if (cli.data) { setClients(cli.data); setClientsError(null); }
+    else if (cli.error) { setClients([]); setClientsError(cli.error.message); }
+    else setClients([]);
     if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
     else {
       // First login - create profile with trial
@@ -882,7 +885,12 @@ export default function App() {
                         </div>
                         <Btn onClick={()=>setModal("add-client")} style={{padding:"10px 14px",fontSize:13}}>+ Add</Btn>
                       </div>
-                      {clients.length===0&&(
+                      {clientsError&&(
+                        <div style={{background:"#3a1a1a",border:`1px solid ${C.danger}44`,borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:C.danger}}>
+                          Error loading clients: {clientsError}
+                        </div>
+                      )}
+                      {!clientsError&&clients.length===0&&(
                         <div style={{textAlign:"center",padding:60,color:C.muted}}>
                           <div style={{fontSize:40,marginBottom:12}}>👥</div>
                           <p style={{marginBottom:8}}>No clients yet.</p>
