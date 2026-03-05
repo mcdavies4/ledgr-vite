@@ -134,12 +134,13 @@ function Modal({ title, onClose, children, wide=false, footer=null }) {
 function PaywallScreen({ session, onSignOut }) {
   const [loading, setLoading] = useState(false);
 
+  const [subError, setSubError] = useState("");
   const handleSubscribe = async () => {
-    setLoading(true);
+    setLoading(true); setSubError("");
     try {
       await startCheckout(session.user.id, session.user.email);
     } catch (e) {
-      alert("Something went wrong. Please try again.");
+      setSubError(e.message || "Something went wrong. Please try again.");
       setLoading(false);
     }
   };
@@ -184,6 +185,7 @@ function PaywallScreen({ session, onSignOut }) {
             <Btn onClick={handleSubscribe} disabled={loading} style={{ width:"100%", fontSize:15, padding:"14px" }}>
               {loading ? "Redirecting to Stripe..." : "Subscribe for $15/mo"}
             </Btn>
+            {subError && <div style={{background:C.dangerDim,border:`1px solid ${C.danger}44`,borderRadius:8,padding:"10px 14px",color:C.danger,fontSize:12,marginTop:8}}>{subError}</div>}
             <p style={{ color:C.muted, fontSize:12, textAlign:"center", marginTop:12, marginBottom:0 }}>
               Secured by Stripe · No hidden fees
             </p>
@@ -230,9 +232,178 @@ function TrialBanner({ profile, session }) {
   );
 }
 
+// ── Landing + Auth wrapper ───────────────────────────────────────────────────
+function LandingOrAuth() {
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState("signup");
+  if (showAuth) return <AuthScreen initialMode={authMode}/>;
+  return <LandingPage onGetStarted={(mode)=>{ setAuthMode(mode); setShowAuth(true); }}/>;
+}
+
+// ── Landing Page ──────────────────────────────────────────────────────────────
+function LandingPage({ onGetStarted }) {
+  return (
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#080B10",color:"#F1F5F9",minHeight:"100vh",overflowX:"hidden"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+      <style>{`
+        @keyframes floatUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes glowPulse{0%,100%{opacity:0.5}50%{opacity:1}}
+        @keyframes countUp{from{opacity:0}to{opacity:1}}
+        .lp-fade{animation:floatUp 0.7s ease forwards}
+        .lp-fade-2{animation:floatUp 0.7s 0.15s ease forwards;opacity:0}
+        .lp-fade-3{animation:floatUp 0.7s 0.3s ease forwards;opacity:0}
+        .lp-fade-4{animation:floatUp 0.7s 0.45s ease forwards;opacity:0}
+        .lp-card:hover{border-color:#2d3a50!important;transform:translateY(-2px)}
+        .lp-card{transition:all 0.2s ease}
+        .lp-btn-main:hover{box-shadow:0 8px 40px rgba(74,222,128,0.35)!important;transform:translateY(-1px)}
+        .lp-btn-main{transition:all 0.15s ease}
+        ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#1E2535;border-radius:4px}
+      `}</style>
+
+      {/* Nav */}
+      <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(8,11,16,0.85)",backdropFilter:"blur(20px)",borderBottom:"1px solid #1E2535",padding:"0 32px",display:"flex",alignItems:"center",height:60}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+          <div style={{width:30,height:30,background:"linear-gradient(135deg,#4ADE80,#22c55e)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#060A0E"}}>L</div>
+          <span style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:800,letterSpacing:"-0.01em"}}>Ledgr</span>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>onGetStarted("login")} style={{background:"transparent",border:"1px solid #1E2535",color:"#8B95A8",padding:"8px 18px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}
+            onMouseEnter={e=>{e.target.style.borderColor="#2d3a50";e.target.style.color="#F1F5F9";}}
+            onMouseLeave={e=>{e.target.style.borderColor="#1E2535";e.target.style.color="#8B95A8";}}>
+            Log in
+          </button>
+          <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{background:"#4ADE80",border:"none",color:"#060A0E",padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 4px 20px rgba(74,222,128,0.2)"}}>
+            Start free
+          </button>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <div style={{position:"relative",overflow:"hidden",padding:"100px 32px 80px",textAlign:"center",maxWidth:800,margin:"0 auto"}}>
+        {/* Glow blobs */}
+        <div style={{position:"absolute",top:"-10%",left:"50%",transform:"translateX(-50%)",width:600,height:400,background:"radial-gradient(ellipse,rgba(74,222,128,0.08) 0%,transparent 70%)",pointerEvents:"none",animation:"glowPulse 6s ease infinite"}}/>
+        <div style={{position:"absolute",bottom:0,left:"-10%",width:400,height:300,background:"radial-gradient(ellipse,rgba(96,165,250,0.05) 0%,transparent 70%)",pointerEvents:"none"}}/>
+
+        <div className="lp-fade" style={{display:"inline-flex",alignItems:"center",gap:8,background:"#0d2018",border:"1px solid #4ADE8033",borderRadius:20,padding:"5px 14px 5px 10px",marginBottom:28}}>
+          <span style={{background:"#4ADE80",color:"#060A0E",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:10,letterSpacing:"0.06em"}}>NEW</span>
+          <span style={{color:"#4ADE80",fontSize:12,fontWeight:500}}>Recurring invoices now live</span>
+        </div>
+
+        <h1 className="lp-fade-2" style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(36px,7vw,72px)",fontWeight:900,margin:"0 0 20px",lineHeight:1.05,letterSpacing:"-0.03em"}}>
+          Finance tools built<br/>
+          <em style={{fontStyle:"italic",color:"#4ADE80"}}>for freelancers</em>
+        </h1>
+
+        <p className="lp-fade-3" style={{fontSize:"clamp(15px,2vw,18px)",color:"#8B95A8",marginBottom:36,maxWidth:520,margin:"0 auto 36px",lineHeight:1.7,fontWeight:400}}>
+          Invoice clients, track expenses, and see your cash flow — all in one beautifully simple dashboard.
+        </p>
+
+        <div className="lp-fade-4" style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+          <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{background:"#4ADE80",border:"none",color:"#060A0E",padding:"14px 32px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
+            Start free — 14 days trial
+          </button>
+          <button onClick={()=>onGetStarted("login")} style={{background:"#141A22",border:"1px solid #1E2535",color:"#F1F5F9",padding:"14px 32px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}
+            onMouseEnter={e=>e.target.style.borderColor="#2d3a50"}
+            onMouseLeave={e=>e.target.style.borderColor="#1E2535"}>
+            Log in
+          </button>
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      <div style={{borderTop:"1px solid #1E2535",borderBottom:"1px solid #1E2535",background:"#0F1318",padding:"20px 32px"}}>
+        <div style={{maxWidth:900,margin:"0 auto",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:24,textAlign:"center"}}>
+          {[
+            {val:"14 days",lbl:"Free trial"},
+            {val:"$15/mo",lbl:"After trial"},
+            {val:"15",lbl:"Currencies"},
+            {val:"PDF",lbl:"Invoice export"},
+            {val:"CSV",lbl:"Data export"},
+          ].map((s,i)=>(
+            <div key={i}>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:800,color:"#4ADE80",marginBottom:4}}>{s.val}</div>
+              <div style={{fontSize:12,color:"#4B5563",fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{s.lbl}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Features grid */}
+      <div style={{maxWidth:1000,margin:"80px auto",padding:"0 32px"}}>
+        <div style={{textAlign:"center",marginBottom:52}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Everything you need</div>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>Stop juggling spreadsheets</h2>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}>
+          {[
+            {icon:"◎",title:"Smart Invoicing",desc:"Create professional PDF invoices in seconds. Mark paid, track overdue, and set up recurring billing for retainer clients."},
+            {icon:"◉",title:"Expense Tracking",desc:"Log every business cost by category. See exactly where your money goes with beautiful monthly breakdowns."},
+            {icon:"◈",title:"Cash Flow Dashboard",desc:"Your income, expenses, and net profit — updated live. Know your numbers without opening a spreadsheet."},
+            {icon:"◐",title:"Payment Alerts",desc:"Never miss a due date. Set alerts for subscriptions, tax payments, or any recurring bill."},
+            {icon:"◫",title:"Client Management",desc:"Store client contact info, see total billed per client, and view their full invoice history at a glance."},
+            {icon:"⬡",title:"Bank Import",desc:"Upload your bank statement CSV and instantly categorise transactions as business expenses."},
+          ].map((f,i)=>(
+            <div key={i} className="lp-card" style={{background:"#141A22",border:"1px solid #1E2535",borderRadius:16,padding:"24px"}}>
+              <div style={{fontSize:28,marginBottom:14,color:"#4ADE80"}}>{f.icon}</div>
+              <div style={{fontSize:16,fontWeight:700,marginBottom:8,letterSpacing:"-0.01em"}}>{f.title}</div>
+              <div style={{fontSize:13,color:"#4B5563",lineHeight:1.7}}>{f.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pricing */}
+      <div style={{background:"#0F1318",borderTop:"1px solid #1E2535",borderBottom:"1px solid #1E2535",padding:"80px 32px"}}>
+        <div style={{maxWidth:440,margin:"0 auto",textAlign:"center"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Simple pricing</div>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,margin:"0 0 36px",letterSpacing:"-0.02em"}}>One plan. Everything included.</h2>
+          <div style={{background:"#141A22",border:"1px solid #1E2535",borderRadius:20,overflow:"hidden"}}>
+            <div style={{background:"#0d2018",borderBottom:"1px solid #1E2535",padding:"32px",textAlign:"center"}}>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:56,fontWeight:900,color:"#4ADE80",lineHeight:1}}>$15</div>
+              <div style={{color:"#4B5563",fontSize:14,marginTop:8}}>per month, cancel anytime</div>
+            </div>
+            <div style={{padding:"28px 32px"}}>
+              {["14-day free trial, no card required","Unlimited invoices & PDF export","Expense tracking & CSV export","Client management","Bank CSV import","Recurring invoices","Payment alerts","Multi-currency (15 currencies)"].map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                  <span style={{color:"#4ADE80",fontSize:12,fontWeight:700,width:18,flexShrink:0}}>✓</span>
+                  <span style={{fontSize:13,color:"#8B95A8"}}>{f}</span>
+                </div>
+              ))}
+              <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{width:"100%",background:"#4ADE80",border:"none",color:"#060A0E",padding:"14px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginTop:8,boxShadow:"0 8px 32px rgba(74,222,128,0.2)"}}>
+                Start 14-day free trial
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer CTA */}
+      <div style={{padding:"80px 32px",textAlign:"center",maxWidth:600,margin:"0 auto"}}>
+        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,4vw,40px)",fontWeight:800,margin:"0 0 16px",letterSpacing:"-0.02em"}}>
+          Ready to take control<br/>of your finances?
+        </h2>
+        <p style={{color:"#4B5563",fontSize:15,marginBottom:32,lineHeight:1.7}}>Join freelancers who use Ledgr to get paid faster and spend less time on admin.</p>
+        <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{background:"#4ADE80",border:"none",color:"#060A0E",padding:"14px 36px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
+          Get started free
+        </button>
+        <p style={{color:"#4B5563",fontSize:12,marginTop:16}}>No credit card required · Cancel anytime</p>
+      </div>
+
+      {/* Footer */}
+      <div style={{borderTop:"1px solid #1E2535",padding:"20px 32px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:22,height:22,background:"linear-gradient(135deg,#4ADE80,#22c55e)",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#060A0E"}}>L</div>
+          <span style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:700}}>Ledgr</span>
+        </div>
+        <span style={{color:"#4B5563",fontSize:12}}>ledgrapp.co.uk</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Auth Screen ───────────────────────────────────────────────────────────────
-function AuthScreen() {
-  const [mode, setMode] = useState("login");
+function AuthScreen({ initialMode="login" }) {
+  const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -610,7 +781,7 @@ export default function App() {
       </div>
     </div>
   );
-  if (!session) return <AuthScreen/>;
+  if (!session) return <LandingOrAuth/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
   const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"}];
