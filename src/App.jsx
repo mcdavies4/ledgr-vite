@@ -204,20 +204,19 @@ function PaywallScreen({ session, onSignOut }) {
 
 // ── Trial Banner ──────────────────────────────────────────────────────────────
 function TrialBanner({ profile, session }) {
-  // Polished trial banner
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
   if (!profile?.trial_ends_at) return null;
   const status = profile?.subscription_status;
   if (status === "active" || status === "past_due") return null;
   const days = daysUntil(profile.trial_ends_at);
   if (days <= 0) return null;
-
   const urgent = days <= 3;
 
   const handleUpgrade = async () => {
-    setLoading(true);
+    setLoading(true); setErr("");
     try { await startCheckout(session.user.id, session.user.email); }
-    catch { setLoading(false); }
+    catch(e) { setErr(e.message || "Unknown error"); setLoading(false); }
   };
 
   return (
@@ -225,8 +224,9 @@ function TrialBanner({ profile, session }) {
       <span style={{ fontSize:13, color: urgent ? C.danger : C.accent, fontWeight:500 }}>
         {urgent ? "⚠️" : "⏳"} {days} day{days===1?"":"s"} left in your free trial
       </span>
-      <button onClick={handleUpgrade} disabled={loading} style={{ marginLeft:"auto", background:C.accent, color:"#0D0F14", border:"none", borderRadius:6, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
-        {loading ? "..." : "Upgrade - $15/mo"}
+      {err && <span style={{fontSize:12,color:C.danger,background:C.dangerDim,padding:"3px 10px",borderRadius:6}}>{err}</span>}
+      <button onClick={handleUpgrade} disabled={loading} style={{ marginLeft:"auto", background:C.accent, color:"#060A0E", border:"none", borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700, cursor:loading?"not-allowed":"pointer", whiteSpace:"nowrap", opacity:loading?0.7:1 }}>
+        {loading ? "Opening Stripe..." : "Upgrade - $15/mo"}
       </button>
     </div>
   );
