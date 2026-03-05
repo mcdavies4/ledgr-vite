@@ -460,7 +460,7 @@ export default function App() {
     if (inv.data) setInvoices(inv.data);
     if (exp.data) setExpenses(exp.data);
     if (alr.data) setAlerts(alr.data);
-    if (cli.data) setClients(cli.data);
+    if (cli.data) setClients(cli.data); else setClients([]);
     if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
     else {
       // First login - create profile with trial
@@ -890,7 +890,7 @@ export default function App() {
                         </div>
                       )}
                       <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                        {clients.map(c=>{
+                        {(clients||[]).map(c=>{
                           const cliInvs=invoices.filter(i=>i.client_id===c.id||i.client===c.name);
                           const totalBilled=cliInvs.reduce((s,i)=>s+i.amount,0);
                           const unpaid=cliInvs.filter(i=>i.status!=="paid").length;
