@@ -9,21 +9,21 @@ const C = {
 };
 
 const CURRENCIES = [
-  { code:"USD", label:"USD — US Dollar", locale:"en-US" },
-  { code:"EUR", label:"EUR — Euro", locale:"de-DE" },
-  { code:"GBP", label:"GBP — British Pound", locale:"en-GB" },
-  { code:"NGN", label:"NGN — Nigerian Naira", locale:"en-NG" },
-  { code:"CAD", label:"CAD — Canadian Dollar", locale:"en-CA" },
-  { code:"AUD", label:"AUD — Australian Dollar", locale:"en-AU" },
-  { code:"ZAR", label:"ZAR — South African Rand", locale:"en-ZA" },
-  { code:"GHS", label:"GHS — Ghanaian Cedi", locale:"en-GH" },
-  { code:"KES", label:"KES — Kenyan Shilling", locale:"en-KE" },
-  { code:"INR", label:"INR — Indian Rupee", locale:"en-IN" },
-  { code:"JPY", label:"JPY — Japanese Yen", locale:"ja-JP" },
-  { code:"CNY", label:"CNY — Chinese Yuan", locale:"zh-CN" },
-  { code:"BRL", label:"BRL — Brazilian Real", locale:"pt-BR" },
-  { code:"MXN", label:"MXN — Mexican Peso", locale:"es-MX" },
-  { code:"AED", label:"AED — UAE Dirham", locale:"ar-AE" },
+  { code:"USD", label:"USD - US Dollar", locale:"en-US" },
+  { code:"EUR", label:"EUR - Euro", locale:"de-DE" },
+  { code:"GBP", label:"GBP - British Pound", locale:"en-GB" },
+  { code:"NGN", label:"NGN - Nigerian Naira", locale:"en-NG" },
+  { code:"CAD", label:"CAD - Canadian Dollar", locale:"en-CA" },
+  { code:"AUD", label:"AUD - Australian Dollar", locale:"en-AU" },
+  { code:"ZAR", label:"ZAR - South African Rand", locale:"en-ZA" },
+  { code:"GHS", label:"GHS - Ghanaian Cedi", locale:"en-GH" },
+  { code:"KES", label:"KES - Kenyan Shilling", locale:"en-KE" },
+  { code:"INR", label:"INR - Indian Rupee", locale:"en-IN" },
+  { code:"JPY", label:"JPY - Japanese Yen", locale:"ja-JP" },
+  { code:"CNY", label:"CNY - Chinese Yuan", locale:"zh-CN" },
+  { code:"BRL", label:"BRL - Brazilian Real", locale:"pt-BR" },
+  { code:"MXN", label:"MXN - Mexican Peso", locale:"es-MX" },
+  { code:"AED", label:"AED - UAE Dirham", locale:"ar-AE" },
 ];
 
 const getCurrency = () => {
@@ -133,7 +133,7 @@ function Modal({ title, onClose, children, wide=false, footer=null }) {
           {children}
         </div>
 
-        {/* Fixed footer — always visible */}
+        {/* Fixed footer - always visible */}
         {footer && (
           <div style={{
             flexShrink:0,
@@ -243,7 +243,7 @@ function TrialBanner({ profile, session }) {
         {urgent ? "⚠️" : "⏳"} {days} day{days===1?"":"s"} left in your free trial
       </span>
       <button onClick={handleUpgrade} disabled={loading} style={{ marginLeft:"auto", background:C.accent, color:"#0D0F14", border:"none", borderRadius:6, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
-        {loading ? "..." : "Upgrade — $15/mo"}
+        {loading ? "..." : "Upgrade - $15/mo"}
       </button>
     </div>
   );
@@ -417,7 +417,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Handle ?success=true from Stripe redirect — poll until subscription is active
+  // Handle ?success=true from Stripe redirect - poll until subscription is active
   const [stripeSuccess, setStripeSuccess] = useState(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -463,7 +463,7 @@ export default function App() {
     if (cli.data) setClients(cli.data);
     if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
     else {
-      // First login — create profile with trial
+      // First login - create profile with trial
       await supabase.from("profiles").insert({ id: uid, email: session.user.email, name: "", phone: "", address: "" });
       const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
       if (data) { setProfile(data); setEditPro(data); }
@@ -667,7 +667,7 @@ export default function App() {
     <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 
-      {/* Trial banner — always visible at top */}
+      {/* Trial banner - always visible at top */}
       {profile && <TrialBanner profile={profile} session={session}/>}
 
       <div style={{display:"flex",flex:1,minHeight:0}}>
@@ -711,7 +711,7 @@ export default function App() {
                   </div>
                   <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
                     <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:600}}>Recent Invoices</h3>
-                    {invoices.length===0&&<p style={{color:C.muted,fontSize:13}}>No invoices yet — create your first one!</p>}
+                    {invoices.length===0&&<p style={{color:C.muted,fontSize:13}}>No invoices yet - create your first one!</p>}
                     {invoices.slice(0,4).map(inv=>(
                       <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
                         <div><div style={{fontSize:14,fontWeight:600}}>{inv.client}</div><div style={{fontSize:12,color:C.muted}}>{inv.description}</div></div>
@@ -750,7 +750,7 @@ export default function App() {
                           <div><div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{inv.client}</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Badge type={inv.type}/><StatusPill status={inv.status}/></div></div>
                           <div style={{fontSize:18,fontWeight:700}}>{money(inv.amount)}</div>
                         </div>
-                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"—"}</div>
+                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 12px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 12px",fontSize:12,flex:1}}>Mark Paid</Btn>}
@@ -775,7 +775,7 @@ export default function App() {
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
                     {[...fExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp=>(
                       <div key={exp.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{exp.name}</span><Badge type={exp.type}/></div><div style={{fontSize:12,color:C.muted}}>{exp.category} · {exp.date?fmtDate(exp.date):"—"}</div></div>
+                        <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{exp.name}</span><Badge type={exp.type}/></div><div style={{fontSize:12,color:C.muted}}>{exp.category} · {exp.date?fmtDate(exp.date):"-"}</div></div>
                         <div style={{fontSize:15,fontWeight:700,color:C.danger}}>{money(exp.amount)}</div>
                         <button onClick={()=>delExpense(exp.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>X</button>
                       </div>
@@ -800,7 +800,7 @@ export default function App() {
                           <div style={{display:"flex",alignItems:"center",gap:12}}>
                             <div style={{width:44,height:44,borderRadius:10,background:urg+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18,color:urg,fontWeight:700}}>{days<=0?"!":days<=3?"!!":"ok"}</div>
                             <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{a.label}</span><Badge type={a.type}/></div><div style={{fontSize:12,color:urg,fontWeight:500}}>{days<=0?"Due today!":days===1?"Due tomorrow!":`Due in ${days} days`}</div></div>
-                            <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{a.amount>0?money(a.amount):"—"}</div><button onClick={()=>delAlert(a.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Dismiss</button></div>
+                            <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{a.amount>0?money(a.amount):"-"}</div><button onClick={()=>delAlert(a.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Dismiss</button></div>
                           </div>
                         </div>
                       );
@@ -814,7 +814,7 @@ export default function App() {
                   {selectedClient ? (
                     // ── Client detail view ──
                     <div>
-                      <button onClick={()=>setSelectedClient(null)} style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:20,padding:0}}>← Back to clients</button>
+                      <button onClick={()=>setSelectedClient(null)} style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:C.textDim,cursor:"pointer",fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:20,padding:0}}>Back to clients</button>
                       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
                           <div>
@@ -862,7 +862,7 @@ export default function App() {
                           <div key={inv.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                             <div>
                               <div style={{fontSize:14,fontWeight:600,marginBottom:3}}>{inv.description||"Invoice"}</div>
-                              <div style={{fontSize:12,color:C.muted}}>Due {inv.due_date?fmtDate(inv.due_date):"—"}</div>
+                              <div style={{fontSize:12,color:C.muted}}>Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
                             </div>
                             <div style={{textAlign:"right"}}>
                               <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{money(inv.amount,profile?.currency)}</div>
@@ -945,11 +945,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Connected accounts */}
-                  
-                      </div>
-                    </div>
-                  )}
+
                 </div>
               )}
 
@@ -1019,7 +1015,7 @@ export default function App() {
       )}
 
       {modal==="invoice"&&(<Modal title="New Invoice" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div>}>
-  {clients.length>0&&<SelectInput label="Pick a Client (optional)" value={newInv.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewInv({...newInv,client_id:e.target.value||null,client:c?c.name:newInv.client})}}><option value="">— Enter manually —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.company?" · "+c.company:""}</option>)}</SelectInput>}
+  {clients.length>0&&<SelectInput label="Pick a Client (optional)" value={newInv.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewInv({...newInv,client_id:e.target.value||null,client:c?c.name:newInv.client})}}><option value="">- Enter manually -</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.company?" · "+c.company:""}</option>)}</SelectInput>}
   <TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
   <TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/>
   <TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/>
@@ -1033,7 +1029,7 @@ export default function App() {
     footer={
       csvStep===2 ? <div style={{display:"flex",gap:10}}>
         <Btn variant="secondary" onClick={()=>setCsvStep(1)} style={{flex:1}}>Back</Btn>
-        <Btn onClick={()=>setCsvStep(3)} disabled={!csvMappings.date||!csvMappings.description||!csvMappings.amount} style={{flex:1}}>Preview →</Btn>
+        <Btn onClick={()=>setCsvStep(3)} disabled={!csvMappings.date||!csvMappings.description||!csvMappings.amount} style={{flex:1}}>Preview -></Btn>
       </div>
       : csvStep===3 ? <div style={{display:"flex",gap:10}}>
         <Btn variant="secondary" onClick={()=>setCsvStep(2)} style={{flex:1}}>Back</Btn>
@@ -1046,8 +1042,8 @@ export default function App() {
       <div>
         <div style={{background:C.surface,borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:C.textDim,lineHeight:1.7}}>
           <strong style={{color:C.text,display:"block",marginBottom:8}}>How to export your bank statement:</strong>
-          🇬🇧 <strong>UK banks:</strong> Barclays, HSBC, Lloyds, Monzo, Revolut — go to Transactions → Export → CSV<br/>
-          🇺🇸 <strong>US banks:</strong> Chase, Bank of America, Wells Fargo — go to Statements → Download → CSV
+          🇬🇧 <strong>UK banks:</strong> Barclays, HSBC, Lloyds, Monzo, Revolut - go to Transactions -> Export -> CSV<br/>
+          🇺🇸 <strong>US banks:</strong> Chase, Bank of America, Wells Fargo - go to Statements, Download -> CSV
         </div>
         <label style={{display:"block",background:C.accentDim,border:`2px dashed ${C.accent}44`,borderRadius:12,padding:"32px 20px",textAlign:"center",cursor:"pointer"}}>
           <div style={{fontSize:32,marginBottom:8}}>📂</div>
@@ -1063,7 +1059,7 @@ export default function App() {
         <p style={{fontSize:13,color:C.textDim,marginBottom:16}}>Map your CSV columns so Ledgr knows what each column means. Found <strong style={{color:C.text}}>{csvRows.length} rows</strong>.</p>
         {[{key:"date",label:"Date column"},{key:"description",label:"Description / Merchant"},{key:"amount",label:"Amount column"}].map(({key,label})=>(
           <SelectInput key={key} label={label} value={csvMappings[key]} onChange={e=>setCsvMappings({...csvMappings,[key]:e.target.value})}>
-            <option value="">— Select column —</option>
+            <option value="">- Select column -</option>
             {csvHeaders.map(h=><option key={h} value={h}>{h}</option>)}
           </SelectInput>
         ))}
@@ -1073,7 +1069,7 @@ export default function App() {
             <div key={i} style={{marginBottom:4,padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
               {csvMappings.date&&<span style={{marginRight:12}}>{r[csvMappings.date]}</span>}
               {csvMappings.description&&<span style={{marginRight:12,color:C.textDim}}>{r[csvMappings.description]?.slice(0,30)}</span>}
-              {csvMappings.amount&&<span style={{color:C.accent}}>£/${r[csvMappings.amount]}</span>}
+              {csvMappings.amount&&<span style={{color:C.accent}}>{r[csvMappings.amount]}</span>}
             </div>
           ))}
         </div>
