@@ -407,7 +407,7 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const close = () => setModal(null);
-  const [newInv, setNewInv] = useState({ client:"", client_id:null, amount:"", due_date:"", type:"business", description:"", status:"pending" });
+  const [newInv, setNewInv] = useState({ client:"", client_id:null, amount:"", due_date:"", type:"business", description:"", status:"pending", recurring:false, recurring_frequency:"monthly" });
   const [newExp, setNewExp] = useState({ name:"", amount:"", category:"", date:"", type:"business" });
   const [newAlr, setNewAlr] = useState({ label:"", amount:"", due_date:"", type:"personal" });
   const [editPro, setEditPro] = useState({ name:"", email:"", phone:"", address:"" });
@@ -475,9 +475,18 @@ export default function App() {
 
   const addInvoice = async () => {
     if (!newInv.client||!newInv.amount) return;
-    const { data } = await supabase.from("invoices").insert({...newInv,amount:parseFloat(newInv.amount),user_id:session.user.id}).select().single();
+    let recurring_next_date = null;
+    if (newInv.recurring && newInv.due_date) {
+      const d = new Date(newInv.due_date);
+      if (newInv.recurring_frequency==="weekly") d.setDate(d.getDate()+7);
+      else if (newInv.recurring_frequency==="monthly") d.setMonth(d.getMonth()+1);
+      else if (newInv.recurring_frequency==="quarterly") d.setMonth(d.getMonth()+3);
+      recurring_next_date = d.toISOString().split("T")[0];
+    }
+    const row = {...newInv, amount:parseFloat(newInv.amount), user_id:session.user.id, recurring_next_date};
+    const { data } = await supabase.from("invoices").insert(row).select().single();
     if (data) setInvoices(p=>[data,...p]);
-    setNewInv({client:"",amount:"",due_date:"",type:"business",description:"",status:"pending"}); close();
+    setNewInv({client:"",client_id:null,amount:"",due_date:"",type:"business",description:"",status:"pending",recurring:false,recurring_frequency:"monthly"}); close();
   };
   const addExpense = async () => {
     if (!newExp.name||!newExp.amount) return;
@@ -751,6 +760,7 @@ export default function App() {
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                           <div><div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{inv.client}</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Badge type={inv.type}/><StatusPill status={inv.status}/></div></div>
                           <div style={{fontSize:18,fontWeight:700}}>{money(inv.amount)}</div>
+                          {inv.recurring&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:"#1e2d4a",color:"#60A5FA",letterSpacing:"0.06em"}}>RECURRING</span>}
                         </div>
                         <div style={{fontSize:12,color:C.muted,marginBottom:12}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -1029,6 +1039,20 @@ export default function App() {
   <TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/>
   <TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/>
   <SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput>
+  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}>
+    <div>
+      <div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring invoice</div>
+      <div style={{fontSize:12,color:C.muted}}>Auto-generate this invoice on a schedule</div>
+    </div>
+    <div onClick={()=>setNewInv({...newInv,recurring:!newInv.recurring})} style={{width:44,height:24,borderRadius:12,background:newInv.recurring?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+      <div style={{position:"absolute",top:3,left:newInv.recurring?22:3,width:18,height:18,borderRadius:"50%",background:"white",transition:"left 0.2s"}}/>
+    </div>
+  </div>
+  {newInv.recurring&&<SelectInput label="Frequency" value={newInv.recurring_frequency} onChange={e=>setNewInv({...newInv,recurring_frequency:e.target.value})}>
+    <option value="weekly">Weekly</option>
+    <option value="monthly">Monthly</option>
+    <option value="quarterly">Quarterly</option>
+  </SelectInput>}
 </Modal>)}
       {modal==="expense"&&(<Modal title="Add Expense" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div>}><TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/><TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/><TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/><TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/><SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Modal>)}
       {modal==="alert"&&(<Modal title="New Alert" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addAlert} style={{flex:1}}>Set Alert</Btn></div>}><TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/><TextInput label="Amount ($) optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/><TextInput label="Due Date" type="date" value={newAlr.due_date} onChange={e=>setNewAlr({...newAlr,due_date:e.target.value})}/><SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}><option value="personal">Personal</option><option value="business">Business</option></SelectInput></Modal>)}
