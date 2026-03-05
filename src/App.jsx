@@ -3,9 +3,13 @@ import { supabase } from "./supabase";
 import { startCheckout } from "./stripe";
 
 const C = {
-  bg: "#0D0F14", surface: "#161921", card: "#1C2030", border: "#252A3A",
-  accent: "#4ADE80", accentDim: "#1a3d2b", warning: "#FBBF24",
-  danger: "#F87171", muted: "#6B7280", text: "#F1F5F9", textDim: "#94A3B8",
+  bg: "#080B10", surface: "#0F1318", card: "#141A22", border: "#1E2535",
+  accent: "#4ADE80", accentDim: "#0d2018", accentGlow: "rgba(74,222,128,0.12)",
+  warning: "#FBBF24", warningDim: "#2a1f0a",
+  danger: "#F87171", dangerDim: "#2a0f0f",
+  blue: "#60A5FA", blueDim: "#0f1e35",
+  muted: "#4B5563", text: "#F1F5F9", textDim: "#8B95A8",
+  surfaceHover: "#141A22",
 };
 
 const CURRENCIES = [
@@ -52,99 +56,75 @@ function useIsMobile() {
 
 // ── UI Primitives ─────────────────────────────────────────────────────────────
 function Badge({ type }) {
-  return <span style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", padding:"2px 7px", borderRadius:4, background:type==="business"?"#1e2d4a":"#2a1e3a", color:type==="business"?"#60A5FA":"#C084FC", textTransform:"uppercase" }}>{type}</span>;
+  return <span style={{ fontSize:9, fontWeight:800, letterSpacing:"0.1em", padding:"3px 8px", borderRadius:6, background:type==="business"?C.blueDim:"#1e1530", color:type==="business"?C.blue:"#A78BFA", textTransform:"uppercase", border:`1px solid ${type==="business"?"#1e3a5f":"#2d1f4a"}` }}>{type}</span>;
 }
 function StatusPill({ status }) {
-  const map = { paid:["#1a3d2b","#4ADE80","Paid"], pending:["#3a2d1a","#FBBF24","Pending"], overdue:["#3a1a1a","#F87171","Overdue"] };
-  const [bg,color,label] = map[status]||map.pending;
-  return <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:20, background:bg, color }}>{label}</span>;
+  const map = {
+    paid:    { bg:"#0a2018", color:"#4ADE80", border:"#1a4a2a", dot:"#4ADE80", label:"Paid" },
+    pending: { bg:"#1f1508", color:"#FBBF24", border:"#3a2a0a", dot:"#FBBF24", label:"Pending" },
+    overdue: { bg:"#1f0808", color:"#F87171", border:"#3a1010", dot:"#F87171", label:"Overdue" },
+  };
+  const s = map[status] || map.pending;
+  return (
+    <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px 3px 8px", borderRadius:20, background:s.bg, color:s.color, border:`1px solid ${s.border}`, display:"inline-flex", alignItems:"center", gap:5 }}>
+      <span style={{ width:5, height:5, borderRadius:"50%", background:s.dot, display:"inline-block", flexShrink:0 }}/>
+      {s.label}
+    </span>
+  );
 }
 function Btn({ children, onClick, variant="primary", style={}, disabled=false }) {
-  return <button onClick={onClick} disabled={disabled} style={{ padding:"11px 20px", borderRadius:8, fontSize:14, fontWeight:600, cursor:disabled?"not-allowed":"pointer", border:"none", fontFamily:"'DM Sans',sans-serif", background:variant==="primary"?C.accent:variant==="danger"?"#3a1a1a":C.border, color:variant==="primary"?"#0D0F14":variant==="danger"?C.danger:C.textDim, minHeight:44, opacity:disabled?0.6:1, ...style }}>{children}</button>;
+  const base = {
+    padding:"11px 20px", borderRadius:10, fontSize:14, fontWeight:700,
+    cursor:disabled?"not-allowed":"pointer", border:"none",
+    fontFamily:"'DM Sans',sans-serif", minHeight:44, opacity:disabled?0.5:1,
+    transition:"all 0.15s ease", letterSpacing:"0.01em",
+  };
+  const variants = {
+    primary: { background:C.accent, color:"#060A0E", boxShadow:`0 0 20px ${C.accentGlow}` },
+    secondary: { background:C.card, color:C.textDim, border:`1px solid ${C.border}` },
+    danger: { background:C.dangerDim, color:C.danger, border:`1px solid #3a1212` },
+  };
+  return <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant]||variants.secondary, ...style }}>{children}</button>;
 }
 function TextInput({ label, ...props }) {
   return (
-    <div style={{ marginBottom:14 }}>
-      {label && <label style={{ display:"block", color:C.textDim, fontSize:12, fontWeight:600, marginBottom:6, letterSpacing:"0.06em", textTransform:"uppercase" }}>{label}</label>}
-      <input {...props} style={{ width:"100%", background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"12px", color:C.text, fontSize:16, outline:"none", boxSizing:"border-box", fontFamily:"'DM Sans',sans-serif" }} />
+    <div style={{ marginBottom:16 }}>
+      {label && <label style={{ display:"block", color:C.textDim, fontSize:11, fontWeight:700, marginBottom:7, letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>}
+      <input {...props} style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", color:C.text, fontSize:15, outline:"none", boxSizing:"border-box", fontFamily:"'DM Sans',sans-serif", transition:"border-color 0.15s", WebkitAppearance:"none" }}
+        onFocus={e=>e.target.style.borderColor=C.accent+"88"}
+        onBlur={e=>e.target.style.borderColor=C.border}
+      />
     </div>
   );
 }
 function SelectInput({ label, children, ...props }) {
   return (
-    <div style={{ marginBottom:14 }}>
-      <label style={{ display:"block", color:C.textDim, fontSize:12, fontWeight:600, marginBottom:6, letterSpacing:"0.06em", textTransform:"uppercase" }}>{label}</label>
-      <select {...props} style={{ width:"100%", background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"12px", color:C.text, fontSize:16, outline:"none", boxSizing:"border-box", fontFamily:"'DM Sans',sans-serif" }}>{children}</select>
+    <div style={{ marginBottom:16 }}>
+      <label style={{ display:"block", color:C.textDim, fontSize:11, fontWeight:700, marginBottom:7, letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>
+      <select {...props} style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", color:C.text, fontSize:15, outline:"none", boxSizing:"border-box", fontFamily:"'DM Sans',sans-serif", transition:"border-color 0.15s", WebkitAppearance:"none", appearance:"none", backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238B95A8' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`, backgroundRepeat:"no-repeat", backgroundPosition:"right 14px center" }}>{children}</select>
     </div>
   );
 }
 function Modal({ title, onClose, children, wide=false, footer=null }) {
   const mobile = window.innerWidth < 768;
-  // Inject global style for iOS scroll fix once
   if (!document.getElementById("modal-style")) {
     const s = document.createElement("style");
     s.id = "modal-style";
-    s.textContent = `.modal-scroll { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; } .modal-scroll::-webkit-scrollbar { display: none; }`;
+    s.textContent = `.modal-scroll{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}.modal-scroll::-webkit-scrollbar{display:none;}`;
     document.head.appendChild(s);
   }
   return (
-    <div
-      onMouseDown={onClose}
-      style={{
-        position:"fixed", top:0, left:0, right:0, bottom:0,
-        background:"rgba(0,0,0,0.85)",
-        display:"flex",
-        alignItems: mobile ? "flex-end" : "center",
-        justifyContent:"center",
-        zIndex:99999,
-        padding: mobile ? 0 : "20px",
-      }}
-    >
-      <div
-        onMouseDown={e=>e.stopPropagation()}
-        style={{
-          background:C.card,
-          border:`1px solid ${C.border}`,
-          borderRadius: mobile ? "20px 20px 0 0" : "16px",
-          width:"100%",
-          maxWidth: wide ? 560 : 480,
-          height: mobile ? "auto" : "auto",
-          maxHeight: mobile ? "80vh" : "85vh",
-          display:"flex",
-          flexDirection:"column",
-          boxShadow: mobile ? "0 -20px 60px rgba(0,0,0,0.6)" : "0 25px 60px rgba(0,0,0,0.6)",
-          overflow:"hidden",
-        }}
-      >
-        {/* Fixed header */}
-        <div style={{ flexShrink:0, padding:"16px 20px 0", background:C.card }}>
-          {mobile && <div style={{ width:36, height:4, background:C.border, borderRadius:2, margin:"0 auto 14px" }}/>}
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:16, borderBottom:`1px solid ${C.border}` }}>
-            <h3 style={{ color:C.text, fontSize:18, fontFamily:"'Playfair Display',serif", margin:0 }}>{title}</h3>
-            <button onClick={onClose} style={{ background:C.border, border:"none", color:C.text, cursor:"pointer", width:36, height:36, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:16, fontWeight:700 }}>✕</button>
+    <div onMouseDown={onClose} style={{ position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(8px)",display:"flex",alignItems:mobile?"flex-end":"center",justifyContent:"center",zIndex:99999,padding:mobile?0:"20px" }}>
+      <div onMouseDown={e=>e.stopPropagation()} style={{ background:C.surface,border:`1px solid ${C.border}`,borderRadius:mobile?"24px 24px 0 0":"20px",width:"100%",maxWidth:wide?580:500,maxHeight:mobile?"80vh":"88vh",display:"flex",flexDirection:"column",boxShadow:mobile?"0 -32px 80px rgba(0,0,0,0.7)":"0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03)",overflow:"hidden" }}>
+        <div style={{ flexShrink:0,padding:"18px 24px 0",background:C.surface }}>
+          {mobile&&<div style={{ width:32,height:3,background:C.border,borderRadius:2,margin:"0 auto 16px",opacity:0.5 }}/>}
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:16,borderBottom:`1px solid ${C.border}` }}>
+            <h3 style={{ color:C.text,fontSize:17,fontFamily:"'Playfair Display',serif",margin:0,fontWeight:700 }}>{title}</h3>
+            <button onClick={onClose} style={{ background:C.card,border:`1px solid ${C.border}`,color:C.textDim,cursor:"pointer",width:32,height:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14,fontWeight:700,transition:"all 0.15s" }}>✕</button>
           </div>
         </div>
-
-        {/* Scrollable body */}
-        <div
-          className="modal-scroll"
-          style={{ flex:1, overflowY:"scroll", padding:"16px 20px", minHeight:0 }}
-        >
-          {children}
-        </div>
-
-        {/* Fixed footer - always visible */}
-        {footer && (
-          <div style={{
-            flexShrink:0,
-            padding:"14px 20px",
-            paddingBottom: mobile ? "calc(14px + env(safe-area-inset-bottom, 0px))" : "16px",
-            borderTop:`1px solid ${C.border}`,
-            background:C.card,
-          }}>
-            {footer}
-          </div>
-        )}
+        <div className="modal-scroll" style={{ flex:1,overflowY:"scroll",padding:"18px 24px",minHeight:0 }}>{children}</div>
+        {footer&&<div style={{ flexShrink:0,padding:"14px 24px",paddingBottom:mobile?"calc(14px + env(safe-area-inset-bottom,0px))":"18px",borderTop:`1px solid ${C.border}`,background:C.surface }}>{footer}</div>}
       </div>
     </div>
   );
@@ -222,6 +202,7 @@ function PaywallScreen({ session, onSignOut }) {
 
 // ── Trial Banner ──────────────────────────────────────────────────────────────
 function TrialBanner({ profile, session }) {
+  // Polished trial banner
   const [loading, setLoading] = useState(false);
   if (!profile?.trial_ends_at) return null;
   const status = profile?.subscription_status;
@@ -287,21 +268,24 @@ function AuthScreen() {
   };
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'DM Sans',sans-serif" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-      <div style={{ width:"100%", maxWidth:400 }}>
-        <div style={{ textAlign:"center", marginBottom:40 }}>
-          <div style={{ width:52, height:52, background:C.accent, borderRadius:14, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, color:"#0D0F14", marginBottom:16 }}>L</div>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:700, color:C.text }}>Ledgr</div>
-          <div style={{ color:C.muted, fontSize:13, marginTop:4 }}>Personal & Business Finance</div>
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'DM Sans',sans-serif", position:"relative", overflow:"hidden" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+      <style>{`@keyframes floatGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:0.8;transform:scale(1.1)}}`}</style>
+      <div style={{position:"absolute",top:"-30%",left:"-20%",width:"60%",height:"60%",background:`radial-gradient(circle,rgba(74,222,128,0.07) 0%,transparent 70%)`,pointerEvents:"none",animation:"floatGlow 8s ease infinite"}}/>
+      <div style={{position:"absolute",bottom:"-20%",right:"-10%",width:"50%",height:"50%",background:`radial-gradient(circle,rgba(96,165,250,0.05) 0%,transparent 70%)`,pointerEvents:"none",animation:"floatGlow 8s ease infinite",animationDelay:"4s"}}/>
+      <div style={{ width:"100%", maxWidth:420, position:"relative", zIndex:1 }}>
+        <div style={{ textAlign:"center", marginBottom:36 }}>
+          <div style={{ width:56, height:56, background:`linear-gradient(135deg,${C.accent},#22c55e)`, borderRadius:16, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:900, color:"#060A0E", marginBottom:18, boxShadow:`0 8px 32px rgba(74,222,128,0.25)` }}>L</div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:32, fontWeight:800, color:C.text, letterSpacing:"-0.02em" }}>Ledgr</div>
+          <div style={{ color:C.muted, fontSize:13, marginTop:6 }}>Personal & Business Finance</div>
         </div>
-        <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:32 }}>
+        <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:"36px 32px", boxShadow:"0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02)" }}>
           <h2 style={{ color:C.text, fontSize:18, fontWeight:700, margin:"0 0 24px", fontFamily:"'Playfair Display',serif" }}>
             {mode==="login"?"Welcome back":mode==="signup"?"Start your 14-day free trial":"Reset password"}
           </h2>
           <TextInput label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" onKeyDown={e=>e.key==="Enter"&&handle()}/>
           {mode!=="reset" && <TextInput label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="min 6 characters" onKeyDown={e=>e.key==="Enter"&&handle()}/>}
-          {error && <div style={{ background:"#3a1a1a", border:`1px solid ${C.danger}44`, borderRadius:8, padding:"10px 14px", color:C.danger, fontSize:13, marginBottom:16 }}>{error}</div>}
+          {error && <div style={{ background:C.dangerDim, border:`1px solid ${C.danger}44`, borderRadius:8, padding:"10px 14px", color:C.danger, fontSize:13, marginBottom:16 }}>{error}</div>}
           {message && <div style={{ background:C.accentDim, border:`1px solid ${C.accent}44`, borderRadius:8, padding:"10px 14px", color:C.accent, fontSize:13, marginBottom:16 }}>{message}</div>}
           <Btn onClick={handle} disabled={loading} style={{ width:"100%", marginBottom:12 }}>
             {loading?"Please wait...":mode==="login"?"Log in":mode==="signup"?"Start free trial":"Send reset email"}
@@ -632,36 +616,39 @@ export default function App() {
   const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
+  const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",bank:"⬡",charts:"◭"};
   const SidebarContent=()=>(
     <>
-      <div style={{marginBottom:32}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-          <div style={{width:32,height:32,background:C.accent,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:"#0D0F14"}}>L</div>
-          <span style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>Ledgr</span>
-          {isMobile&&<button onClick={()=>setSidebarOpen(false)} style={{marginLeft:"auto",background:C.border,border:"none",color:C.text,borderRadius:8,width:32,height:32,cursor:"pointer"}}>X</button>}
+      <div style={{marginBottom:28,paddingBottom:20,borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+          <div style={{width:34,height:34,background:`linear-gradient(135deg,${C.accent},#22c55e)`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#060A0E",boxShadow:`0 4px 16px ${C.accentGlow}`}}>L</div>
+          <span style={{fontFamily:"'Playfair Display',serif",fontSize:19,fontWeight:700,letterSpacing:"-0.01em"}}>Ledgr</span>
+          {isMobile&&<button onClick={()=>setSidebarOpen(false)} style={{marginLeft:"auto",background:C.card,border:`1px solid ${C.border}`,color:C.textDim,borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16}}>✕</button>}
         </div>
-        <p style={{color:C.muted,fontSize:11,margin:0,paddingLeft:42,wordBreak:"break-all"}}>{session.user.email}</p>
+        <p style={{color:C.muted,fontSize:11,margin:0,paddingLeft:44,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{session.user.email}</p>
       </div>
       <nav style={{flex:1}}>
         {TABS.map(t=>(
-          <button key={t.id} onClick={()=>goTab(t.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"12px",borderRadius:8,border:"none",cursor:"pointer",background:tab===t.id?C.accentDim:"transparent",color:tab===t.id?C.accent:C.textDim,fontSize:14,fontWeight:tab===t.id?600:400,marginBottom:4,textAlign:"left",fontFamily:"'DM Sans',sans-serif"}}>
+          <button key={t.id} onClick={()=>goTab(t.id)} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:10,border:"none",cursor:"pointer",background:tab===t.id?C.accentDim:"transparent",color:tab===t.id?C.accent:C.textDim,fontSize:13,fontWeight:tab===t.id?700:400,marginBottom:2,textAlign:"left",fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s",position:"relative"}}>
+            <span style={{fontSize:14,opacity:0.8}}>{ICONS[t.id]||"·"}</span>
             {t.label}
-            {t.id==="alerts"&&upcoming.length>0&&<span style={{marginLeft:"auto",background:C.warning,color:"#000",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:10}}>{upcoming.length}</span>}
+            {tab===t.id&&<span style={{position:"absolute",left:0,top:"20%",bottom:"20%",width:2,background:C.accent,borderRadius:2}}/>}
+            {t.id==="alerts"&&upcoming.length>0&&<span style={{marginLeft:"auto",background:C.warning,color:"#000",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:10,letterSpacing:"0.05em"}}>{upcoming.length}</span>}
           </button>
         ))}
       </nav>
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,marginTop:16}}>
-        <p style={{color:C.muted,fontSize:11,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:8}}>View</p>
+        <p style={{color:C.muted,fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingLeft:12}}>Filter</p>
         {["all","business","personal"].map(f=>(
-          <button key={f} onClick={()=>setFilter(f)} style={{display:"block",width:"100%",padding:"8px 12px",borderRadius:6,border:"none",cursor:"pointer",textAlign:"left",background:filter===f?C.border:"transparent",color:filter===f?C.text:C.muted,fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:2}}>
-            {f==="all"?"All finances":f==="business"?"Business":"Personal"}
+          <button key={f} onClick={()=>setFilter(f)} style={{display:"block",width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:filter===f?C.card:"transparent",color:filter===f?C.text:C.muted,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:2,fontWeight:filter===f?600:400,transition:"all 0.15s"}}>
+            {f==="all"?"All finances":f==="business"?"Business only":"Personal only"}
           </button>
         ))}
       </div>
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,marginTop:16}}>
-        {profile?.subscription_status==="active" && <div style={{fontSize:11,color:C.accent,fontWeight:600,padding:"4px 12px",marginBottom:8}}>✓ Pro subscriber</div>}
-        <button onClick={()=>{setEditPro(profile||{});setModal("profile");setSidebarOpen(false);}} style={{display:"block",width:"100%",padding:"8px 12px",borderRadius:6,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>My Profile</button>
-        <button onClick={signOut} style={{display:"block",width:"100%",padding:"8px 12px",borderRadius:6,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.danger,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>Sign Out</button>
+        {profile?.subscription_status==="active"&&<div style={{fontSize:11,color:C.accent,fontWeight:700,padding:"6px 12px",marginBottom:8,background:C.accentDim,borderRadius:8,display:"flex",alignItems:"center",gap:6}}><span>✓</span> Pro</div>}
+        <button onClick={()=>{setEditPro(profile||{});setModal("profile");setSidebarOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:2,transition:"all 0.15s"}}>⚙ Profile</button>
+        <button onClick={signOut} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.danger,fontSize:12,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>⎋ Sign out</button>
       </div>
     </>
   );
@@ -676,20 +663,28 @@ export default function App() {
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+      <style>{`
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
+        input::placeholder { color: ${C.muted}; opacity: 0.7; }
+        @keyframes fadeSlideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        .tab-content { animation: fadeSlideUp 0.2s ease; }
+      `}</style>
 
-      {/* Trial banner - always visible at top */}
       {profile && <TrialBanner profile={profile} session={session}/>}
 
       <div style={{display:"flex",flex:1,minHeight:0}}>
         {!isMobile&&(
-          <div style={{width:220,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"28px 16px",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh"}}>
+          <div style={{width:228,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"24px 14px",display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh"}}>
             <SidebarContent/>
           </div>
         )}
         {isMobile&&sidebarOpen&&(
-          <div onMouseDown={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:9998}}>
-            <div onMouseDown={e=>e.stopPropagation()} style={{width:260,height:"100%",background:C.surface,borderRight:`1px solid ${C.border}`,padding:"28px 16px",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+          <div onMouseDown={()=>setSidebarOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(4px)",zIndex:9998}}>
+            <div onMouseDown={e=>e.stopPropagation()} style={{width:260,height:"100%",background:C.surface,borderRight:`1px solid ${C.border}`,padding:"24px 14px",display:"flex",flexDirection:"column",overflowY:"auto"}}>
               <SidebarContent/>
             </div>
           </div>
@@ -697,31 +692,32 @@ export default function App() {
 
         <div style={{flex:1,overflowY:"auto",paddingBottom:isMobile?80:0}}>
           {isMobile&&(
-            <div style={{position:"sticky",top:0,zIndex:100,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
-              <button onClick={()=>setSidebarOpen(true)} style={{background:C.border,border:"none",color:C.text,borderRadius:8,width:40,height:40,cursor:"pointer",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center"}}>☰</button>
+            <div style={{position:"sticky",top:0,zIndex:100,background:C.bg,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,backdropFilter:"blur(20px)"}}>
+              <button onClick={()=>setSidebarOpen(true)} style={{background:C.card,border:`1px solid ${C.border}`,color:C.text,borderRadius:9,width:38,height:38,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>☰</button>
               <span style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>Ledgr</span>
-              <span style={{marginLeft:"auto",color:C.muted,fontSize:13}}>{TABS.find(t=>t.id===tab)?.label}</span>
+              <span style={{marginLeft:"auto",color:C.muted,fontSize:12,fontWeight:500}}>{TABS.find(t=>t.id===tab)?.label}</span>
             </div>
           )}
 
           {loading&&<div style={{padding:60,textAlign:"center",color:C.muted}}>Loading your data...</div>}
           {!loading&&(
-            <div style={{padding:isMobile?"16px":"32px 36px"}}>
+            <div className="tab-content" style={{padding:isMobile?"16px":"32px 40px",maxWidth:1100,width:"100%"}}>
 
               {tab==="dashboard"&&(
                 <div>
-                  <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Financial Overview</h1>
-                  <p style={{color:C.muted,fontSize:14,marginBottom:24}}>Your money, all in one place.</p>
-                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:12,marginBottom:24}}>
+                  <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 6px",fontWeight:800,letterSpacing:"-0.02em"}}>Financial Overview</h1>
+                  <p style={{color:C.muted,fontSize:13,marginBottom:28,fontWeight:400}}>Your money, all in one place.</p>
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:10,marginBottom:28}}>
                     {stats.map((s,i)=>(
-                      <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px"}}>
-                        <div style={{color:C.muted,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>{s.label}</div>
-                        <div style={{color:s.color,fontSize:isMobile?15:19,fontWeight:700,fontFamily:"'Playfair Display',serif"}}>{s.value}</div>
+                      <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px",position:"relative",overflow:"hidden",transition:"border-color 0.2s"}}>
+                        <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${s.color}44,transparent)`}}/>
+                        <div style={{color:C.muted,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>{s.label}</div>
+                        <div style={{color:s.color,fontSize:isMobile?14:18,fontWeight:800,fontFamily:"'Playfair Display',serif",lineHeight:1}}>{s.value}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,marginBottom:16}}>
-                    <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:600}}>Recent Invoices</h3>
+                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 22px",marginBottom:12}}>
+                    <h3 style={{margin:"0 0 16px",fontSize:13,fontWeight:700,color:C.textDim,textTransform:"uppercase",letterSpacing:"0.08em"}}>Recent Invoices</h3>
                     {invoices.length===0&&<p style={{color:C.muted,fontSize:13}}>No invoices yet - create your first one!</p>}
                     {invoices.slice(0,4).map(inv=>(
                       <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
@@ -731,8 +727,8 @@ export default function App() {
                     ))}
                   </div>
                   {upcoming.length>0&&(
-                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                      <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:600}}>Upcoming Payments</h3>
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 22px"}}>
+                      <h3 style={{margin:"0 0 16px",fontSize:13,fontWeight:700,color:C.textDim,textTransform:"uppercase",letterSpacing:"0.08em"}}>Upcoming Payments</h3>
                       {upcoming.map(a=>(
                         <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
                           <div><div style={{fontSize:14,fontWeight:600}}>{a.label}</div><div style={{fontSize:12,color:a.days<=3?C.danger:a.days<=7?C.warning:C.muted}}>{a.days<=0?"Due today!":`Due in ${a.days} days`}</div></div>
@@ -747,25 +743,34 @@ export default function App() {
               {tab==="invoices"&&(
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
-                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Invoices</h1><p style={{color:C.muted,fontSize:13,margin:0}}>{fInvoices.length} invoices</p></div>
+                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Invoices</h1><p style={{color:C.muted,fontSize:13,margin:0}}>{fInvoices.length} invoices</p></div>
                     <div style={{display:"flex",gap:8,flexShrink:0}}>
                       <Btn onClick={()=>setModal("invoice")} style={{padding:"10px 14px",fontSize:13}}>+ New</Btn>
                       <Btn variant="secondary" onClick={()=>exportCSV("invoices",invoices,expenses)} style={{padding:"10px 14px",fontSize:13}}>CSV</Btn>
                     </div>
                   </div>
-                  {fInvoices.length===0&&<div style={{textAlign:"center",padding:60,color:C.muted}}>No invoices yet.</div>}
+                  {fInvoices.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:C.muted,background:C.card,borderRadius:16,border:`1px solid ${C.border}`}}>No invoices yet.</div>}
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
                     {fInvoices.map(inv=>(
-                      <div key={inv.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                          <div><div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{inv.client}</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Badge type={inv.type}/><StatusPill status={inv.status}/></div></div>
-                          <div style={{fontSize:18,fontWeight:700}}>{money(inv.amount)}</div>
-                          {inv.recurring&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:"#1e2d4a",color:"#60A5FA",letterSpacing:"0.06em"}}>RECURRING</span>}
+                      <div key={inv.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 20px",transition:"border-color 0.2s,transform 0.15s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor="#2d3548";e.currentTarget.style.transform="translateY(-1px)";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)";}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                          <div>
+                            <div style={{fontSize:15,fontWeight:700,marginBottom:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                              {inv.client}
+                              {inv.recurring&&<span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:5,background:C.blueDim,color:C.blue,letterSpacing:"0.08em",border:`1px solid ${C.blue}33`}}>RECURRING</span>}
+                            </div>
+                            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Badge type={inv.type}/><StatusPill status={inv.status}/></div>
+                          </div>
+                          <div style={{fontSize:20,fontWeight:800,fontFamily:"'Playfair Display',serif",textAlign:"right"}}>
+                            {money(inv.amount)}
+                          </div>
                         </div>
-                        <div style={{fontSize:12,color:C.muted,marginBottom:12}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
+                        <div style={{fontSize:12,color:C.muted,marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${C.border}`}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 12px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
-                          {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 12px",fontSize:12,flex:1}}>Mark Paid</Btn>}
+                          <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 14px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
+                          {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 14px",fontSize:12,flex:1}}>Mark Paid</Btn>}
                           <Btn variant="danger" onClick={()=>delInvoice(inv.id)} style={{padding:"8px 12px",fontSize:12}}>Delete</Btn>
                         </div>
                       </div>
@@ -777,19 +782,27 @@ export default function App() {
               {tab==="expenses"&&(
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
-                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Expenses</h1><p style={{color:C.muted,fontSize:13,margin:0}}>{fExpenses.length} entries</p></div>
+                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Expenses</h1><p style={{color:C.muted,fontSize:13,margin:0}}>{fExpenses.length} entries</p></div>
                     <div style={{display:"flex",gap:8,flexShrink:0}}>
                       <Btn onClick={()=>setModal("expense")} style={{padding:"10px 14px",fontSize:13}}>+ Add</Btn>
                       <Btn variant="secondary" onClick={()=>exportCSV("expenses",invoices,expenses)} style={{padding:"10px 14px",fontSize:13}}>CSV</Btn>
                     </div>
                   </div>
-                  {fExpenses.length===0&&<div style={{textAlign:"center",padding:60,color:C.muted}}>No expenses logged yet.</div>}
+                  {fExpenses.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:C.muted,background:C.card,borderRadius:16,border:`1px solid ${C.border}`}}>No expenses logged yet.</div>}
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
                     {[...fExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp=>(
-                      <div key={exp.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{exp.name}</span><Badge type={exp.type}/></div><div style={{fontSize:12,color:C.muted}}>{exp.category} · {exp.date?fmtDate(exp.date):"-"}</div></div>
-                        <div style={{fontSize:15,fontWeight:700,color:C.danger}}>{money(exp.amount)}</div>
-                        <button onClick={()=>delExpense(exp.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>X</button>
+                      <div key={exp.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:12,transition:"border-color 0.15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.borderColor=C.danger+"44"}
+                        onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                            <span style={{fontSize:14,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{exp.name}</span>
+                            <Badge type={exp.type}/>
+                          </div>
+                          <div style={{fontSize:12,color:C.muted}}>{exp.category} · {exp.date?fmtDate(exp.date):"-"}</div>
+                        </div>
+                        <div style={{fontSize:16,fontWeight:800,color:C.danger,fontFamily:"'Playfair Display',serif",flexShrink:0}}>{money(exp.amount)}</div>
+                        <button onClick={()=>delExpense(exp.id)} style={{background:C.dangerDim,border:`1px solid ${C.danger}33`,color:C.danger,borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background 0.15s"}}>✕</button>
                       </div>
                     ))}
                   </div>
@@ -799,7 +812,7 @@ export default function App() {
               {tab==="alerts"&&(
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Alerts</h1><p style={{color:C.muted,fontSize:13,margin:0}}>Never miss a due date</p></div>
+                    <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Alerts</h1><p style={{color:C.muted,fontSize:13,margin:0}}>Never miss a due date</p></div>
                     <Btn onClick={()=>setModal("alert")} style={{padding:"10px 14px",fontSize:13}}>+ Add</Btn>
                   </div>
                   {alerts.length===0&&<div style={{textAlign:"center",padding:60,color:C.muted}}>No alerts set.</div>}
@@ -823,7 +836,7 @@ export default function App() {
 
               {tab==="clients"&&(
                 <div>
-                  {clientsError&&<div style={{background:"#3a1a1a",border:"1px solid #f8717144",borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:"#f87171"}}>Error: {clientsError}</div>}
+                  {clientsError&&<div style={{background:C.dangerDim,border:"1px solid #f8717144",borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:"#f87171"}}>Error: {clientsError}</div>}
                   {selectedClient ? (
                     // ── Client detail view ──
                     <div>
@@ -890,13 +903,13 @@ export default function App() {
                     <div>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
                         <div>
-                          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Clients</h1>
+                          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Clients</h1>
                           <p style={{color:C.muted,fontSize:13,margin:0}}>{clients.length} client{clients.length!==1?"s":""}</p>
                         </div>
                         <Btn onClick={()=>setModal("add-client")} style={{padding:"10px 14px",fontSize:13}}>+ Add</Btn>
                       </div>
                       {clientsError&&(
-                        <div style={{background:"#3a1a1a",border:`1px solid ${C.danger}44`,borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:C.danger}}>
+                        <div style={{background:C.dangerDim,border:`1px solid ${C.danger}44`,borderRadius:10,padding:16,marginBottom:16,fontSize:13,color:C.danger}}>
                           Error loading clients: {clientsError}
                         </div>
                       )}
@@ -943,7 +956,7 @@ export default function App() {
               {tab==="bank"&&(
                 <div>
                   <div style={{marginBottom:20}}>
-                    <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px"}}>Bank & Transactions</h1>
+                    <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Bank & Transactions</h1>
                     <p style={{color:C.muted,fontSize:13,margin:0}}>Import transactions from your bank statement</p>
                   </div>
 
@@ -1024,7 +1037,7 @@ export default function App() {
       {isMobile&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200}}>
           {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",border:"none",background:"transparent",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:"'DM Sans',sans-serif",position:"relative"}}>
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",border:"none",background:"transparent",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:"'DM Sans',sans-serif",position:"relative",transition:"color 0.15s"}}>
               <span style={{fontSize:9,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>{t.label}</span>
               {t.id==="alerts"&&upcoming.length>0&&<span style={{position:"absolute",top:4,right:"50%",marginRight:-20,background:C.warning,color:"#000",fontSize:8,fontWeight:700,padding:"1px 4px",borderRadius:8}}>{upcoming.length}</span>}
             </button>
