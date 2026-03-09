@@ -787,10 +787,6 @@ export default function App() {
   const delExpense = async (id) => { await supabase.from("expenses").delete().eq("id",id); setExpenses(p=>p.filter(x=>x.id!==id)); };
   const delAlert   = async (id) => { await supabase.from("alerts").delete().eq("id",id); setAlerts(p=>p.filter(x=>x.id!==id)); };
 
-  // ── Bank functions ──
-  const SUPABASE_URL = "https://phjybvphmlzghdebonzy.supabase.co";
-  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoanlidnBobWx6Z2hkZWJvbnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTI2MDIsImV4cCI6MjA4ODE2ODYwMn0.6r7C6aQPn0YTjmDjRkP8fVd6cQhXJ_L1jBYqsu2qRWM";
-
   // ── CSV Import ──
   const handleCsvUpload = (e) => {
     const file = e.target.files[0];
