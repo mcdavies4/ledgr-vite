@@ -707,6 +707,8 @@ export default function App() {
   const [stripeKey, setStripeKey] = useState("");
   const [paypalClientId, setPaypalClientId] = useState("");
   const [paypalSecret, setPaypalSecret] = useState("");
+  const [revolutKey, setRevolutKey] = useState("");
+  const [revolutType, setRevolutType] = useState("business");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
 
   const [csvRows, setCsvRows] = useState([]);
@@ -970,6 +972,21 @@ ${businessName}`
     setAccountsLoading(false);
   };
 
+  const connectRevolut = async (apiKey, accountType) => {
+    setAccountsLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/connect-revolut`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ action:"connect", user_id:session.user.id, api_key:apiKey, account_type:accountType }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadAccounts();
+    } catch(e) { alert("Revolut connection failed: " + e.message); }
+    setAccountsLoading(false);
+  };
+
   const connectPaypal = async (clientId, secret) => {
     setAccountsLoading(true);
     try {
@@ -1018,7 +1035,7 @@ ${businessName}`
   const syncAccount = async (accountId, provider) => {
     setAccountsLoading(true);
     try {
-      const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : "connect-wise";
+      const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : provider === "revolut" ? "connect-revolut" : "connect-wise";
       const res = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
@@ -1033,7 +1050,7 @@ ${businessName}`
 
   const disconnectAccount = async (accountId, provider) => {
     if (!confirm("Disconnect this account? Your transaction history will be kept.")) return;
-    const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : "connect-wise";
+    const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : provider === "revolut" ? "connect-revolut" : "connect-wise";
     await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
@@ -1499,14 +1516,14 @@ ${businessName}`
                         />
                       )}
 
-                      {/* Revolut - coming soon */}
+                      {/* Revolut */}
                       {!connectedAccounts.find(a=>a.provider==="revolut") && (
                         <ConnectCard
                           icon="🔄"
                           name="Revolut"
-                          desc="Connect Revolut for automatic multi-currency transaction sync."
+                          desc="Connect Revolut Business or Personal to sync multi-currency transactions."
                           color="#7B61FF"
-                          comingSoon
+                          onConnect={()=>setModal("connect-revolut")}
                         />
                       )}
                     </div>
@@ -1829,6 +1846,63 @@ ${businessName}`
           />
           <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
             Use a restricted key with read-only access. We only read your balance and payouts — never initiate transfers.
+          </p>
+        </Modal>
+      )}
+      {modal==="connect-revolut"&&(
+        <Modal title="Connect Revolut" onClose={()=>{close();setRevolutKey("");setRevolutType("business");}} footer={
+          <div style={{display:"flex",gap:10}}>
+            <Btn variant="secondary" onClick={()=>{close();setRevolutKey("");setRevolutType("business");}} style={{flex:1}}>Cancel</Btn>
+            <Btn onClick={async()=>{
+              if(!revolutKey.trim()){alert("Please enter your API key");return;}
+              await connectRevolut(revolutKey.trim(), revolutType);
+              close();setRevolutKey("");setRevolutType("business");
+            }} style={{flex:1,background:"#7B61FF",boxShadow:"none"}} disabled={accountsLoading}>
+              {accountsLoading?"Connecting...":"Connect Revolut"}
+            </Btn>
+          </div>
+        }>
+          {/* Account type toggle */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+            {["business","personal"].map(t=>(
+              <button key={t} onClick={()=>setRevolutType(t)} style={{padding:"10px",borderRadius:10,border:`1px solid ${revolutType===t?"#7B61FF":"#1E2535"}`,background:revolutType===t?"#1a1630":"transparent",color:revolutType===t?"#a5a0ff":"#8B95A8",fontSize:13,fontWeight:revolutType===t?700:400,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"capitalize",transition:"all 0.15s"}}>
+                {t==="business"?"🏢 Business":"👤 Personal"}
+              </button>
+            ))}
+          </div>
+
+          {revolutType==="business" ? (
+            <div style={{background:"#0f0a1f",border:"1px solid #7B61FF44",borderRadius:12,padding:16,marginBottom:20}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#a5a0ff",marginBottom:8}}>How to get your Revolut Business API key</div>
+              <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+                1. Log in to <strong style={{color:"#F1F5F9"}}>business.revolut.com</strong><br/>
+                2. Go to <strong style={{color:"#F1F5F9"}}>Settings → API</strong><br/>
+                3. Click <strong style={{color:"#F1F5F9"}}>Generate API key</strong><br/>
+                4. Set access to <strong style={{color:"#F1F5F9"}}>Read only</strong><br/>
+                5. Copy and paste the key below
+              </div>
+            </div>
+          ) : (
+            <div style={{background:"#0f0a1f",border:"1px solid #7B61FF44",borderRadius:12,padding:16,marginBottom:20}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#a5a0ff",marginBottom:8}}>How to get your Revolut Personal access token</div>
+              <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+                1. Open the <strong style={{color:"#F1F5F9"}}>Revolut app</strong> on your phone<br/>
+                2. Go to <strong style={{color:"#F1F5F9"}}>Profile → Security & Privacy</strong><br/>
+                3. Tap <strong style={{color:"#F1F5F9"}}>Open Banking</strong><br/>
+                4. Create a new access token and copy it below
+              </div>
+            </div>
+          )}
+
+          <TextInput
+            label={revolutType==="business" ? "Revolut Business API Key" : "Revolut Personal Access Token"}
+            value={revolutKey}
+            onChange={e=>setRevolutKey(e.target.value)}
+            placeholder={revolutType==="business" ? "Enter your API key..." : "Enter your access token..."}
+            type="password"
+          />
+          <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
+            Read-only access only. We never initiate transfers or payments.
           </p>
         </Modal>
       )}
