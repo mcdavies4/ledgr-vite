@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import PayPage from "./PayPage";
 import { supabase } from "./supabase";
 import { startCheckout } from "./stripe";
 
@@ -798,6 +799,27 @@ export default function App() {
     setNewAlr({label:"",amount:"",due_date:"",type:"personal"}); close();
   };
   const markPaid = async (id) => { await supabase.from("invoices").update({status:"paid"}).eq("id",id); setInvoices(p=>p.map(x=>x.id===id?{...x,status:"paid"}:x)); };
+  const [linkLoading, setLinkLoading] = useState(null); // invoice id being processed
+  const [linkCopied, setLinkCopied] = useState(null);
+  const sendPaymentLink = async (inv) => {
+    setLinkLoading(inv.id);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-url`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ invoice_id: inv.id, user_id: session.user.id }),
+      });
+      const { url, error } = await res.json();
+      if (error) throw new Error(error);
+      // Copy to clipboard
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(inv.id);
+      setTimeout(() => setLinkCopied(null), 3000);
+      // Also update local state with payment_link
+      setInvoices(p => p.map(x => x.id===inv.id ? {...x, payment_link: url} : x));
+    } catch(e) { alert("Could not generate payment link: " + e.message); }
+    setLinkLoading(null);
+  };
   const delInvoice = async (id) => { await supabase.from("invoices").delete().eq("id",id); setInvoices(p=>p.filter(x=>x.id!==id)); };
   const delExpense = async (id) => { await supabase.from("expenses").delete().eq("id",id); setExpenses(p=>p.filter(x=>x.id!==id)); };
   const delAlert   = async (id) => { await supabase.from("alerts").delete().eq("id",id); setAlerts(p=>p.filter(x=>x.id!==id)); };
@@ -899,6 +921,9 @@ export default function App() {
   const totalExp     = expenses.reduce((s,e)=>s+e.amount,0);
   const netProfit    = totalIncome-expenses.filter(e=>e.type==="business").reduce((s,e)=>s+e.amount,0);
   const byCat        = expenses.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+e.amount;return a;},{});
+
+  // Public pay page - no auth needed
+  if (window.location.pathname.startsWith("/pay/")) return <PayPage/>;
 
   if (authLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"sans-serif"}}>Loading...</div>;
 
@@ -1082,6 +1107,9 @@ export default function App() {
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 14px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 14px",fontSize:12,flex:1}}>Mark Paid</Btn>}
+                          {inv.status!=="paid"&&<Btn variant="secondary" onClick={()=>sendPaymentLink(inv)} disabled={linkLoading===inv.id} style={{padding:"8px 14px",fontSize:12,flex:1,color:linkCopied===inv.id?"#4ADE80":C.blue,border:`1px solid ${linkCopied===inv.id?"#4ADE8044":C.blue+"44"}`}}>
+                            {linkLoading===inv.id?"..." : linkCopied===inv.id ? "✓ Copied!" : "Send Link"}
+                          </Btn>}
                           <Btn variant="danger" onClick={()=>delInvoice(inv.id)} style={{padding:"8px 12px",fontSize:12}}>Delete</Btn>
                         </div>
                       </div>
