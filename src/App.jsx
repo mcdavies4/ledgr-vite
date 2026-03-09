@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import PayPage from "./PayPage";
+import { useState, useEffect, lazy, Suspense } from "react";
+const PayPage = lazy(() => import("./PayPage"));
 import { supabase } from "./supabase";
 import { startCheckout } from "./stripe";
 
@@ -947,7 +947,11 @@ ${businessName}`
   const byCat        = expenses.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+e.amount;return a;},{});
 
   // Public pay page - no auth needed
-  if (window.location.pathname.startsWith("/pay/")) return <PayPage/>;
+  if (window.location.pathname.startsWith("/pay/")) return (
+    <Suspense fallback={<div style={{minHeight:"100vh",background:"#080B10",display:"flex",alignItems:"center",justifyContent:"center",color:"#4B5563",fontFamily:"sans-serif"}}>Loading...</div>}>
+      <PayPage/>
+    </Suspense>
+  );
 
   if (authLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"sans-serif"}}>Loading...</div>;
 
