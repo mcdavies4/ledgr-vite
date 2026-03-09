@@ -702,6 +702,8 @@ export default function App() {
 
   // Handle ?success=true from Stripe redirect - poll until subscription is active
   const [stripeSuccess, setStripeSuccess] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const isAdmin = session?.user?.email === ADMIN_EMAIL;
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("success") === "true") {
@@ -904,8 +906,6 @@ export default function App() {
       </div>
     </div>
   );
-  const isAdmin = session?.user?.email === ADMIN_EMAIL;
-  const [showAdmin, setShowAdmin] = useState(false);
   if (!session) return <LandingOrAuth/>;
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
