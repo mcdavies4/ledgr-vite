@@ -704,6 +704,7 @@ export default function App() {
   const [accountTxs, setAccountTxs] = useState([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [wiseKey, setWiseKey] = useState("");
+  const [stripeKey, setStripeKey] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
 
   const [csvRows, setCsvRows] = useState([]);
@@ -739,24 +740,6 @@ export default function App() {
     if (params.get("success") === "true") {
       window.history.replaceState({}, "", window.location.pathname);
       setStripeSuccess(true);
-    }
-  }, []);
-
-  // Handle Stripe Connect OAuth callback
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state"); // user_id
-    if (code && state && window.location.pathname === "/connect/stripe") {
-      window.history.replaceState({}, "", "/");
-      fetch(`${SUPABASE_URL}/functions/v1/connect-stripe`, {
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
-        body: JSON.stringify({ action:"callback", user_id:state, code }),
-      }).then(r=>r.json()).then(data => {
-        if (!data.error) { loadAccounts(); setTab("accounts"); }
-        else alert("Stripe Connect error: " + data.error);
-      });
     }
   }, []);
 
@@ -1000,17 +983,19 @@ ${businessName}`
     setAccountsLoading(false);
   };
 
-  const connectStripe = async () => {
+  const connectStripe = async (apiKey) => {
+    setAccountsLoading(true);
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/connect-stripe`, {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
-        body: JSON.stringify({ action:"connect", user_id:session.user.id }),
+        body: JSON.stringify({ action:"connect", user_id:session.user.id, api_key:apiKey }),
       });
-      const { url, error } = await res.json();
-      if (error) throw new Error(error);
-      window.location.href = url;
-    } catch(e) { alert("Stripe Connect failed: " + e.message); }
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadAccounts();
+    } catch(e) { alert("Stripe connection failed: " + e.message); }
+    setAccountsLoading(false);
   };
 
   const syncAccount = async (accountId, provider) => {
@@ -1482,7 +1467,7 @@ ${businessName}`
                           name="Stripe"
                           desc="Connect your Stripe account to track payouts and match them to invoices."
                           color="#635bff"
-                          onConnect={connectStripe}
+                          onConnect={()=>setModal("connect-stripe")}
                         />
                       )}
 
@@ -1799,7 +1784,38 @@ ${businessName}`
   <TextInput label="Address (optional)" value={editClient.address||""} onChange={e=>setEditClient({...editClient,address:e.target.value})} placeholder="New York, NY"/>
   <TextInput label="Notes (optional)" value={editClient.notes||""} onChange={e=>setEditClient({...editClient,notes:e.target.value})} placeholder="e.g. Net 30 payment terms"/>
 </Modal>)}
-{modal==="connect-wise"&&(
+{modal==="connect-stripe"&&(
+        <Modal title="Connect Stripe" onClose={()=>{close();setStripeKey("");}} footer={
+          <div style={{display:"flex",gap:10}}>
+            <Btn variant="secondary" onClick={()=>{close();setStripeKey("");}} style={{flex:1}}>Cancel</Btn>
+            <Btn onClick={async()=>{if(!stripeKey.trim()){alert("Please enter your API key");return;}await connectStripe(stripeKey.trim());close();setStripeKey("");}} style={{flex:1,background:"#635bff",boxShadow:"none"}} disabled={accountsLoading}>
+              {accountsLoading?"Connecting...":"Connect Stripe"}
+            </Btn>
+          </div>
+        }>
+          <div style={{background:"#120f2a",border:"1px solid #635bff44",borderRadius:12,padding:16,marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#a5a0ff",marginBottom:8}}>How to get your Stripe Restricted Key</div>
+            <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+              1. Log in to your Stripe Dashboard<br/>
+              2. Go to <strong style={{color:"#F1F5F9"}}>Developers → API keys</strong><br/>
+              3. Click <strong style={{color:"#F1F5F9"}}>Create restricted key</strong><br/>
+              4. Enable <strong style={{color:"#F1F5F9"}}>Read</strong> access for: Balance, Payouts<br/>
+              5. Copy and paste the key below
+            </div>
+          </div>
+          <TextInput
+            label="Stripe Restricted API Key"
+            value={stripeKey}
+            onChange={e=>setStripeKey(e.target.value)}
+            placeholder="rk_live_..."
+            type="password"
+          />
+          <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
+            Use a restricted key with read-only access. We only read your balance and payouts — never initiate transfers.
+          </p>
+        </Modal>
+      )}
+      {modal==="connect-wise"&&(
         <Modal title="Connect Wise" onClose={()=>{close();setWiseKey("");}} footer={
           <div style={{display:"flex",gap:10}}>
             <Btn variant="secondary" onClick={()=>{close();setWiseKey("");}} style={{flex:1}}>Cancel</Btn>
