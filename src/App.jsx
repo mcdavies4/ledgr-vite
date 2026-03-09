@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import PayPage from "./PayPage";
+import ContactPage from "./ContactPage";
+import AboutPage from "./AboutPage";
+import PrivacyPage from "./PrivacyPage";
 import { supabase } from "./supabase";
 import { startCheckout } from "./stripe";
 
@@ -421,7 +424,12 @@ function LandingPage({ onGetStarted }) {
           <div style={{width:22,height:22,background:"linear-gradient(135deg,#4ADE80,#22c55e)",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#060A0E"}}>L</div>
           <span style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:700}}>Ledgr</span>
         </div>
-        <span style={{color:"#4B5563",fontSize:12}}>ledgrapp.co.uk</span>
+        <div style={{display:"flex",gap:20,alignItems:"center"}}>
+          <a href="/about" style={{color:"#4B5563",fontSize:12,textDecoration:"none"}}>About</a>
+          <a href="/contact" style={{color:"#4B5563",fontSize:12,textDecoration:"none"}}>Contact</a>
+          <a href="/privacy" style={{color:"#4B5563",fontSize:12,textDecoration:"none"}}>Privacy</a>
+          <span style={{color:"#4B5563",fontSize:12}}>ledgrapp.co.uk</span>
+        </div>
       </div>
     </div>
   );
@@ -1132,6 +1140,9 @@ ${businessName}`
   const byCat        = expenses.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+e.amount;return a;},{});
 
   // Public pay page - no auth needed
+  if (window.location.pathname === "/contact") return <ContactPage/>;
+  if (window.location.pathname === "/about") return <AboutPage/>;
+  if (window.location.pathname === "/privacy") return <PrivacyPage/>;
   if (window.location.pathname.startsWith("/pay/")) return <PayPage/>;
 
   if (authLoading) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontFamily:"sans-serif"}}>Loading...</div>;
