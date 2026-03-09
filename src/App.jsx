@@ -705,6 +705,8 @@ export default function App() {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [wiseKey, setWiseKey] = useState("");
   const [stripeKey, setStripeKey] = useState("");
+  const [paypalClientId, setPaypalClientId] = useState("");
+  const [paypalSecret, setPaypalSecret] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
 
   const [csvRows, setCsvRows] = useState([]);
@@ -968,6 +970,21 @@ ${businessName}`
     setAccountsLoading(false);
   };
 
+  const connectPaypal = async (clientId, secret) => {
+    setAccountsLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/connect-paypal`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ action:"connect", user_id:session.user.id, client_id:clientId, secret }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadAccounts();
+    } catch(e) { alert("PayPal connection failed: " + e.message); }
+    setAccountsLoading(false);
+  };
+
   const connectWise = async (apiKey) => {
     setAccountsLoading(true);
     try {
@@ -1001,7 +1018,7 @@ ${businessName}`
   const syncAccount = async (accountId, provider) => {
     setAccountsLoading(true);
     try {
-      const fn = provider === "stripe" ? "connect-stripe" : "connect-wise";
+      const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : "connect-wise";
       const res = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
@@ -1016,7 +1033,7 @@ ${businessName}`
 
   const disconnectAccount = async (accountId, provider) => {
     if (!confirm("Disconnect this account? Your transaction history will be kept.")) return;
-    const fn = provider === "stripe" ? "connect-stripe" : "connect-wise";
+    const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : "connect-wise";
     await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
@@ -1471,14 +1488,14 @@ ${businessName}`
                         />
                       )}
 
-                      {/* PayPal - coming soon */}
+                      {/* PayPal */}
                       {!connectedAccounts.find(a=>a.provider==="paypal") && (
                         <ConnectCard
                           icon="🅿"
                           name="PayPal"
                           desc="Track PayPal income and auto-import transactions."
                           color="#009cde"
-                          comingSoon
+                          onConnect={()=>setModal("connect-paypal")}
                         />
                       )}
 
@@ -1502,11 +1519,11 @@ ${businessName}`
                       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
                         {connectedAccounts.map(acc => (
                           <div key={acc.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,position:"relative",overflow:"hidden"}}>
-                            <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:acc.provider==="wise"?"#4ADE80":acc.provider==="stripe"?"#635bff":"#009cde"}}/>
+                            <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:acc.provider==="wise"?"#4ADE80":acc.provider==="stripe"?"#635bff":acc.provider==="paypal"?"#009cde":"#7B61FF"}}/>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                               <div style={{display:"flex",alignItems:"center",gap:10}}>
                                 <div style={{width:36,height:36,borderRadius:10,background:C.bg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>
-                                  {acc.provider==="wise"?"🌍":acc.provider==="stripe"?"⚡":"🅿"}
+                                  {acc.provider==="wise"?"🌍":acc.provider==="stripe"?"⚡":acc.provider==="paypal"?"🅿":"🔄"}
                                 </div>
                                 <div>
                                   <div style={{fontSize:14,fontWeight:700}}>{acc.account_name}</div>
@@ -1812,6 +1829,47 @@ ${businessName}`
           />
           <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
             Use a restricted key with read-only access. We only read your balance and payouts — never initiate transfers.
+          </p>
+        </Modal>
+      )}
+      {modal==="connect-paypal"&&(
+        <Modal title="Connect PayPal" onClose={()=>{close();setPaypalClientId("");setPaypalSecret("");}} footer={
+          <div style={{display:"flex",gap:10}}>
+            <Btn variant="secondary" onClick={()=>{close();setPaypalClientId("");setPaypalSecret("");}} style={{flex:1}}>Cancel</Btn>
+            <Btn onClick={async()=>{
+              if(!paypalClientId.trim()||!paypalSecret.trim()){alert("Please enter both Client ID and Secret");return;}
+              await connectPaypal(paypalClientId.trim(),paypalSecret.trim());
+              close();setPaypalClientId("");setPaypalSecret("");
+            }} style={{flex:1,background:"#009cde",boxShadow:"none"}} disabled={accountsLoading}>
+              {accountsLoading?"Connecting...":"Connect PayPal"}
+            </Btn>
+          </div>
+        }>
+          <div style={{background:"#081520",border:"1px solid #009cde44",borderRadius:12,padding:16,marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#009cde",marginBottom:8}}>How to get your PayPal API credentials</div>
+            <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+              1. Go to <strong style={{color:"#F1F5F9"}}>developer.paypal.com</strong><br/>
+              2. Log in and go to <strong style={{color:"#F1F5F9"}}>Apps & Credentials</strong><br/>
+              3. Click <strong style={{color:"#F1F5F9"}}>Create App</strong> → name it "Ledgr"<br/>
+              4. Switch to <strong style={{color:"#F1F5F9"}}>Live</strong> mode (top right toggle)<br/>
+              5. Copy your <strong style={{color:"#F1F5F9"}}>Client ID</strong> and <strong style={{color:"#F1F5F9"}}>Secret</strong> below
+            </div>
+          </div>
+          <TextInput
+            label="PayPal Client ID"
+            value={paypalClientId}
+            onChange={e=>setPaypalClientId(e.target.value)}
+            placeholder="AaBbCcDd..."
+          />
+          <TextInput
+            label="PayPal Secret"
+            value={paypalSecret}
+            onChange={e=>setPaypalSecret(e.target.value)}
+            placeholder="EeFfGgHh..."
+            type="password"
+          />
+          <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
+            We only read your transaction history and balance. We never initiate payments or transfers.
           </p>
         </Modal>
       )}
