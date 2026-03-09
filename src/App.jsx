@@ -1854,7 +1854,7 @@ ${businessName}`
                 const expByCat = tyExpenses.filter(e=>e.type==="business").reduce((acc,e)=>{ acc[e.category||"Other"]=(acc[e.category||"Other"]||0)+e.amount; return acc; },{});
                 const incByClient = tyInvoices.reduce((acc,i)=>{ acc[i.client||"Unknown"]=(acc[i.client||"Unknown"]||0)+i.amount; return acc; },{});
                 const years=[]; for(let y=_curY-2;y<=_curY;y++) years.push(y);
-                const cur = profile?.currency || country.currency;
+                const cur = country.currency || profile?.currency;
 
                 const exportTaxCSV = () => {
                   const rows=[
