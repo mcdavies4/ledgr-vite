@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#080B10"/>
+      <stop offset="100%" stop-color="#0F1318"/>
+    </linearGradient>
+    <linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4ADE80"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+    <linearGradient id="accent-line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4ADE80"/>
+      <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#4ADE80" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#4ADE80" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur-glow">
+      <feGaussianBlur stdDeviation="40" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Ambient glow -->
+  <ellipse cx="600" cy="180" rx="500" ry="300" fill="url(#glow)"/>
+
+  <!-- Border -->
+  <rect x="1" y="1" width="1198" height="628" fill="none" stroke="#1E2535" stroke-width="2" rx="0"/>
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="1200" height="3" fill="url(#accent-line)"/>
+
+  <!-- Logo mark -->
+  <rect x="548" y="68" width="104" height="104" rx="24" fill="url(#logo-g)"/>
+  <text x="600" y="151" font-family="Georgia, serif" font-size="72" font-weight="900" fill="#060A0E" text-anchor="middle">L</text>
+
+  <!-- App name -->
+  <text x="600" y="272" font-family="Georgia, 'Times New Roman', serif" font-size="88" font-weight="900" fill="#F1F5F9" text-anchor="middle" letter-spacing="-3">Ledgr</text>
+
+  <!-- Tagline -->
+  <text x="600" y="334" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="26" font-weight="400" fill="#4B5563" text-anchor="middle" letter-spacing="0.5">Invoice &amp; Finance Tools for Freelancers</text>
+
+  <!-- Divider -->
+  <rect x="552" y="368" width="96" height="3" rx="2" fill="#4ADE80" opacity="0.6"/>
+
+  <!-- Feature pills -->
+  <g transform="translate(600, 430)">
+    <!-- Pill 1 -->
+    <rect x="-440" y="-18" width="160" height="36" rx="18" fill="#0d2018" stroke="#4ADE8044" stroke-width="1"/>
+    <text x="-360" y="5" font-family="-apple-system, sans-serif" font-size="15" fill="#4ADE80" text-anchor="middle" font-weight="600">PDF Invoices</text>
+
+    <!-- Pill 2 -->
+    <rect x="-258" y="-18" width="176" height="36" rx="18" fill="#0d2018" stroke="#4ADE8044" stroke-width="1"/>
+    <text x="-170" y="5" font-family="-apple-system, sans-serif" font-size="15" fill="#4ADE80" text-anchor="middle" font-weight="600">Expense Tracking</text>
+
+    <!-- Pill 3 -->
+    <rect x="-60" y="-18" width="168" height="36" rx="18" fill="#0d2018" stroke="#4ADE8044" stroke-width="1"/>
+    <text x="24" y="5" font-family="-apple-system, sans-serif" font-size="15" fill="#4ADE80" text-anchor="middle" font-weight="600">Client Management</text>
+
+    <!-- Pill 4 -->
+    <rect x="130" y="-18" width="152" height="36" rx="18" fill="#0d2018" stroke="#4ADE8044" stroke-width="1"/>
+    <text x="206" y="5" font-family="-apple-system, sans-serif" font-size="15" fill="#4ADE80" text-anchor="middle" font-weight="600">15 Currencies</text>
+
+    <!-- Pill 5 -->
+    <rect x="304" y="-18" width="160" height="36" rx="18" fill="#0d2018" stroke="#4ADE8044" stroke-width="1"/>
+    <text x="384" y="5" font-family="-apple-system, sans-serif" font-size="15" fill="#4ADE80" text-anchor="middle" font-weight="600">Recurring Bills</text>
+  </g>
+
+  <!-- Bottom CTA -->
+  <text x="600" y="548" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" fill="#4B5563" text-anchor="middle">14-day free trial · $15/mo · ledgrapp.co.uk</text>
+</svg>
