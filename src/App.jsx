@@ -614,7 +614,7 @@ function AuthScreen({ initialMode="login" }) {
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
-function generatePDF(inv, profile) {
+function generatePDF(inv, profile={}) {
   const num = `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
   const currCode = profile.currency || "USD"; const m = (n) => new Intl.NumberFormat(CURRENCIES.find(c=>c.code===currCode)?.locale||"en-US",{style:"currency",currency:currCode}).format(n);
   const d = (v) => v ? new Date(v).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "N/A";
@@ -733,28 +733,41 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     const uid = session?.user?.id;
-    if (!uid) return;
-    const [inv, exp, alr, pro, cli] = await Promise.all([
-      supabase.from("invoices").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
-      supabase.from("expenses").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
-      supabase.from("alerts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
-      supabase.from("profiles").select("*").eq("id",uid).single(),
-      supabase.from("clients").select("*").eq("user_id",uid).order("name",{ascending:true}),
-    ]);
-    if (inv.data) setInvoices(inv.data);
-    if (exp.data) setExpenses(exp.data);
-    if (alr.data) setAlerts(alr.data);
-    if (cli.data) { setClients(cli.data); setClientsError(null); }
-    else if (cli.error) { setClients([]); setClientsError(cli.error.message); }
-    else setClients([]);
-    if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
-    else {
-      // First login - create profile with trial
-      await supabase.from("profiles").insert({ id: uid, email: session.user.email, name: "", phone: "", address: "" });
-      const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
-      if (data) { setProfile(data); setEditPro(data); }
+    if (!uid) { setLoading(false); return; }
+    try {
+      const [inv, exp, alr, pro, cli] = await Promise.all([
+        supabase.from("invoices").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
+        supabase.from("expenses").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
+        supabase.from("alerts").select("*").eq("user_id",uid).order("created_at",{ascending:false}),
+        supabase.from("profiles").select("*").eq("id",uid).single(),
+        supabase.from("clients").select("*").eq("user_id",uid).order("name",{ascending:true}),
+      ]);
+      const today = new Date().toISOString().split("T")[0];
+      if (inv.data) {
+        // Auto-detect overdue: pending invoices past their due_date
+        const marked = inv.data.map(i =>
+          i.status === "pending" && i.due_date && i.due_date < today
+            ? {...i, status:"overdue"} : i
+        );
+        setInvoices(marked);
+      }
+      if (exp.data) setExpenses(exp.data);
+      if (alr.data) setAlerts(alr.data);
+      if (cli.data) { setClients(cli.data); setClientsError(null); }
+      else if (cli.error) { setClients([]); setClientsError(cli.error.message); }
+      else setClients([]);
+      if (pro.data) { setProfile(pro.data); setEditPro(pro.data); if(pro.data.currency) setCurrencyStore(pro.data.currency); }
+      else {
+        // First login - create profile with trial
+        await supabase.from("profiles").insert({ id: uid, email: session.user.email, name: "", phone: "", address: "" });
+        const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
+        if (data) { setProfile(data); setEditPro(data); }
+      }
+    } catch(e) {
+      console.error("loadAll error:", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const addInvoice = async () => {
