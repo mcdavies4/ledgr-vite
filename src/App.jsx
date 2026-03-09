@@ -724,7 +724,7 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const close = () => setModal(null);
-  const [newInv, setNewInv] = useState({ client:"", client_id:null, amount:"", due_date:"", type:"business", description:"", status:"pending", recurring:false, recurring_frequency:"monthly" });
+  const [newInv, setNewInv] = useState({ client:"", client_id:null, client_email:"", amount:"", due_date:"", type:"business", description:"", status:"pending", recurring:false, recurring_frequency:"monthly" });
   const [newExp, setNewExp] = useState({ name:"", amount:"", category:"", date:"", type:"business" });
   const [newAlr, setNewAlr] = useState({ label:"", amount:"", due_date:"", type:"personal" });
   const [editPro, setEditPro] = useState({ name:"", email:"", phone:"", address:"" });
@@ -834,6 +834,7 @@ export default function App() {
   };
   const markPaid = async (id) => { await supabase.from("invoices").update({status:"paid"}).eq("id",id); setInvoices(p=>p.map(x=>x.id===id?{...x,status:"paid"}:x)); };
   const [linkLoading, setLinkLoading] = useState(null); // invoice id being processed
+  const [reminderSending, setReminderSending] = useState(null);
   const [linkCopied, setLinkCopied] = useState(null);
   const getOrCreatePayLink = async (inv) => {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-url`, {
@@ -878,6 +879,39 @@ ${businessName}`
     } catch(e) { alert("Could not generate payment link: " + e.message); }
     setLinkLoading(null);
   };
+  const sendReminderNow = async (inv, reminderType) => {
+    if (!inv.client_email) { alert("Please add the client\'s email address to this invoice first."); return; }
+    setReminderSending(inv.id + "-" + reminderType);
+    try {
+      const senderName = profile?.business_name || profile?.name || "Your freelancer";
+      const amount = new Intl.NumberFormat("en-US",{style:"currency",currency:inv.currency||"USD"}).format(inv.amount);
+      const dueDateStr = new Date(inv.due_date).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+      // Call edge function directly for manual send
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-invoice-reminder-manual`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({
+          invoice_id: inv.id,
+          user_id: session.user.id,
+          reminder_type: reminderType,
+          client_email: inv.client_email,
+          client_name: inv.client,
+          sender_name: senderName,
+          amount, due_date: dueDateStr,
+          description: inv.description || inv.name,
+          payment_link: inv.payment_link,
+          invoice_number: inv.invoice_number || inv.id.slice(0,8).toUpperCase(),
+          reply_to: profile?.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      alert(`Reminder sent to ${inv.client_email}`);
+    } catch(e) { alert("Failed to send: " + e.message); }
+    setReminderSending(null);
+  };
+
+
   const delInvoice = async (id) => { await supabase.from("invoices").delete().eq("id",id); setInvoices(p=>p.filter(x=>x.id!==id)); };
   const delExpense = async (id) => { await supabase.from("expenses").delete().eq("id",id); setExpenses(p=>p.filter(x=>x.id!==id)); };
   const delAlert   = async (id) => { await supabase.from("alerts").delete().eq("id",id); setAlerts(p=>p.filter(x=>x.id!==id)); };
@@ -1290,6 +1324,16 @@ ${businessName}`
                           {inv.status!=="paid"&&<Btn variant="secondary" onClick={()=>emailPaymentLink(inv)} disabled={!!linkLoading} style={{padding:"8px 14px",fontSize:12,flex:1,color:"#FBBF24",border:"1px solid #FBBF2444"}}>
                             {linkLoading===inv.id+"-email" ? "..." : "✉ Email"}
                           </Btn>}
+                          {inv.status!=="paid"&&inv.client_email&&(
+                            <Btn variant="secondary" onClick={()=>setModal("reminder-"+inv.id)} style={{padding:"8px 14px",fontSize:12,color:"#A78BFA",border:"1px solid #A78BFA44"}}>
+                              🔔 Remind
+                            </Btn>
+                          )}
+                          {inv.status!=="paid"&&!inv.client_email&&(
+                            <Btn variant="secondary" onClick={()=>setModal("add-client-email-"+inv.id)} style={{padding:"8px 14px",fontSize:12,color:C.muted,border:`1px solid ${C.border}`}}>
+                              🔔
+                            </Btn>
+                          )}
                           <Btn variant="danger" onClick={()=>delInvoice(inv.id)} style={{padding:"8px 12px",fontSize:12}}>Delete</Btn>
                         </div>
                       </div>
@@ -1705,8 +1749,9 @@ ${businessName}`
       )}
 
       {modal==="invoice"&&(<Modal title="New Invoice" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div>}>
-  {clients.length>0&&<SelectInput label="Pick a Client (optional)" value={newInv.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewInv({...newInv,client_id:e.target.value||null,client:c?c.name:newInv.client})}}><option value="">- Enter manually -</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.company?" · "+c.company:""}</option>)}</SelectInput>}
+  {clients.length>0&&<SelectInput label="Pick a Client (optional)" value={newInv.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewInv({...newInv,client_id:e.target.value||null,client:c?c.name:newInv.client,client_email:c?.email||newInv.client_email})}}><option value="">- Enter manually -</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.company?" · "+c.company:""}</option>)}</SelectInput>}
   <TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
+  <TextInput label="Client Email (for reminders)" type="email" value={newInv.client_email||""} onChange={e=>setNewInv({...newInv,client_email:e.target.value})} placeholder="client@email.com"/>
   <TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/>
   <TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/>
   <TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/>
@@ -1849,6 +1894,85 @@ ${businessName}`
           </p>
         </Modal>
       )}
+      
+      {/* Reminder modal for each invoice */}
+      {modal&&modal.startsWith("reminder-")&&(()=>{
+        const invId = modal.replace("reminder-","");
+        const inv = invoices.find(x=>x.id===invId);
+        if (!inv) return null;
+        const daysUntilDue = inv.due_date ? Math.round((new Date(inv.due_date)-new Date())/(1000*60*60*24)) : null;
+        const isOverdue = daysUntilDue !== null && daysUntilDue < 0;
+        const daysOverdue = isOverdue ? Math.abs(daysUntilDue) : 0;
+        return (
+          <Modal title="Send Reminder" onClose={close}>
+            <div style={{marginBottom:20}}>
+              <p style={{fontSize:13,color:C.muted,marginBottom:16}}>Sending to: <strong style={{color:C.text}}>{inv.client_email}</strong></p>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#60a5fa"}}>⏰ Due soon reminder</div>
+                      <div style={{fontSize:12,color:C.muted,marginTop:2}}>Polite heads-up that invoice is due</div>
+                    </div>
+                    <Btn onClick={()=>{sendReminderNow(inv,"due-soon");close();}} disabled={reminderSending===inv.id+"-due-soon"} style={{padding:"8px 16px",fontSize:12,background:"#1d3a5a",color:"#60a5fa",boxShadow:"none"}}>
+                      {reminderSending===inv.id+"-due-soon"?"Sending...":"Send"}
+                    </Btn>
+                  </div>
+                </div>
+                <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#FBBF24"}}>⚠️ Overdue reminder</div>
+                      <div style={{fontSize:12,color:C.muted,marginTop:2}}>Invoice is past due date</div>
+                    </div>
+                    <Btn onClick={()=>{sendReminderNow(inv,"overdue-1");close();}} disabled={reminderSending===inv.id+"-overdue-1"} style={{padding:"8px 16px",fontSize:12,background:"#2a1f0a",color:"#FBBF24",boxShadow:"none"}}>
+                      {reminderSending===inv.id+"-overdue-1"?"Sending...":"Send"}
+                    </Btn>
+                  </div>
+                </div>
+                <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#F87171"}}>🚨 Final chase</div>
+                      <div style={{fontSize:12,color:C.muted,marginTop:2}}>Urgent — 7 days overdue notice</div>
+                    </div>
+                    <Btn onClick={()=>{sendReminderNow(inv,"overdue-7");close();}} disabled={reminderSending===inv.id+"-overdue-7"} style={{padding:"8px 16px",fontSize:12,background:"#1f0808",color:"#F87171",boxShadow:"none"}}>
+                      {reminderSending===inv.id+"-overdue-7"?"Sending...":"Send"}
+                    </Btn>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p style={{fontSize:11,color:C.muted,lineHeight:1.6}}>Email will appear from <strong>{profile?.business_name||profile?.name||"you"}</strong> via Ledgr. Replies go directly to your email.</p>
+          </Modal>
+        );
+      })()}
+
+      {/* Add client email modal */}
+      {modal&&modal.startsWith("add-client-email-")&&(()=>{
+        const invId = modal.replace("add-client-email-","");
+        const inv = invoices.find(x=>x.id===invId);
+        if (!inv) return null;
+        const [tempEmail, setTempEmail] = [inv._tempEmail||"", (v)=>{ inv._tempEmail=v; }];
+        return (
+          <Modal title="Add Client Email" onClose={close} footer={
+            <div style={{display:"flex",gap:10}}>
+              <Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn>
+              <Btn onClick={async()=>{
+                const email = document.getElementById("temp-client-email")?.value;
+                if (!email) return;
+                await supabase.from("invoices").update({client_email:email}).eq("id",invId);
+                setInvoices(p=>p.map(x=>x.id===invId?{...x,client_email:email}:x));
+                close();
+              }} style={{flex:1}}>Save & Remind</Btn>
+            </div>
+          }>
+            <p style={{fontSize:13,color:C.muted,marginBottom:16}}>Add {inv.client}&apos;s email to enable automatic reminders.</p>
+            <TextInput id="temp-client-email" label="Client Email" type="email" placeholder="client@email.com"/>
+          </Modal>
+        );
+      })()}
+
       {modal==="connect-revolut"&&(
         <Modal title="Connect Revolut" onClose={()=>{close();setRevolutKey("");setRevolutType("business");}} footer={
           <div style={{display:"flex",gap:10}}>
