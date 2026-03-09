@@ -87,6 +87,31 @@ function Btn({ children, onClick, variant="primary", style={}, disabled=false })
   };
   return <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant]||variants.secondary, ...style }}>{children}</button>;
 }
+function ConnectCard({ icon, name, desc, color, onConnect, comingSoon }) {
+  return (
+    <div style={{background:"#141A22",border:`1px solid ${comingSoon?"#1E2535":color+"33"}`,borderRadius:16,padding:20,position:"relative",overflow:"hidden",opacity:comingSoon?0.6:1}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:comingSoon?"#1E2535":`linear-gradient(90deg,${color},${color}88)`}}/>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+        <div style={{width:40,height:40,borderRadius:12,background:"#0F1318",border:`1px solid ${comingSoon?"#1E2535":color+"44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{icon}</div>
+        <div>
+          <div style={{fontSize:15,fontWeight:700,color:"#F1F5F9"}}>{name}</div>
+          {comingSoon && <span style={{fontSize:10,background:"#1E2535",padding:"2px 7px",borderRadius:4,color:"#4B5563",fontWeight:600}}>COMING SOON</span>}
+        </div>
+      </div>
+      <p style={{fontSize:13,color:"#8B95A8",marginBottom:16,lineHeight:1.6}}>{desc}</p>
+      <button
+        onClick={comingSoon?undefined:onConnect}
+        disabled={comingSoon}
+        style={{width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${comingSoon?"#1E2535":color+"66"}`,background:comingSoon?"transparent":`${color}11`,color:comingSoon?"#4B5563":color,fontSize:13,fontWeight:700,cursor:comingSoon?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}
+        onMouseEnter={e=>{if(!comingSoon)e.currentTarget.style.background=`${color}22`}}
+        onMouseLeave={e=>{if(!comingSoon)e.currentTarget.style.background=`${color}11`}}
+      >
+        {comingSoon ? "Coming Soon" : `Connect ${name}`}
+      </button>
+    </div>
+  );
+}
+
 function TextInput({ label, ...props }) {
   return (
     <div style={{ marginBottom:16 }}>
@@ -675,6 +700,10 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [clients, setClients] = useState([]);
+  const [connectedAccounts, setConnectedAccounts] = useState([]);
+  const [accountTxs, setAccountTxs] = useState([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [wiseKey, setWiseKey] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
 
   const [csvRows, setCsvRows] = useState([]);
@@ -713,6 +742,24 @@ export default function App() {
     }
   }, []);
 
+  // Handle Stripe Connect OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state"); // user_id
+    if (code && state && window.location.pathname === "/connect/stripe") {
+      window.history.replaceState({}, "", "/");
+      fetch(`${SUPABASE_URL}/functions/v1/connect-stripe`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ action:"callback", user_id:state, code }),
+      }).then(r=>r.json()).then(data => {
+        if (!data.error) { loadAccounts(); setTab("accounts"); }
+        else alert("Stripe Connect error: " + data.error);
+      });
+    }
+  }, []);
+
   // Poll Supabase until subscription_status is active (webhook may take a few seconds)
   useEffect(() => {
     if (!stripeSuccess || !session) return;
@@ -729,7 +776,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [stripeSuccess, session]);
 
-  useEffect(() => { if (session) loadAll(); }, [session]);
+  useEffect(() => { if (session) { loadAll(); loadAccounts(); } }, [session]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -925,6 +972,91 @@ ${businessName}`
   const saveProfile = async () => { await supabase.from("profiles").upsert({...editPro,id:session.user.id}); setProfile(editPro); if(editPro.currency) setCurrencyStore(editPro.currency); close(); };
   const signOut = () => supabase.auth.signOut();
 
+  // ── Accounts ──────────────────────────────────────────────────────
+  const loadAccounts = async () => {
+    setAccountsLoading(true);
+    const uid = session?.user?.id;
+    const [accs, txs] = await Promise.all([
+      supabase.from("connected_accounts").select("*").eq("user_id",uid).eq("is_active",true).order("created_at",{ascending:false}),
+      supabase.from("account_transactions").select("*").eq("user_id",uid).order("date",{ascending:false}).limit(100),
+    ]);
+    if (accs.data) setConnectedAccounts(accs.data);
+    if (txs.data) setAccountTxs(txs.data);
+    setAccountsLoading(false);
+  };
+
+  const connectWise = async (apiKey) => {
+    setAccountsLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/connect-wise`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ action:"connect", user_id:session.user.id, api_key:apiKey }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadAccounts();
+    } catch(e) { alert("Wise connection failed: " + e.message); }
+    setAccountsLoading(false);
+  };
+
+  const connectStripe = async () => {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/connect-stripe`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ action:"connect", user_id:session.user.id }),
+      });
+      const { url, error } = await res.json();
+      if (error) throw new Error(error);
+      window.location.href = url;
+    } catch(e) { alert("Stripe Connect failed: " + e.message); }
+  };
+
+  const syncAccount = async (accountId, provider) => {
+    setAccountsLoading(true);
+    try {
+      const fn = provider === "stripe" ? "connect-stripe" : "connect-wise";
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ action:"sync", user_id:session.user.id, account_id:accountId }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadAccounts();
+    } catch(e) { alert("Sync failed: " + e.message); }
+    setAccountsLoading(false);
+  };
+
+  const disconnectAccount = async (accountId, provider) => {
+    if (!confirm("Disconnect this account? Your transaction history will be kept.")) return;
+    const fn = provider === "stripe" ? "connect-stripe" : "connect-wise";
+    await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+      body: JSON.stringify({ action:"disconnect", user_id:session.user.id, account_id:accountId }),
+    });
+    setConnectedAccounts(p => p.filter(a => a.id !== accountId));
+  };
+
+  const importTxAsExpense = async (tx) => {
+    if (tx.imported_as_expense) return;
+    const { data } = await supabase.from("expenses").insert({
+      name: tx.description,
+      amount: tx.amount,
+      category: tx.category || "Bank Transaction",
+      date: tx.date,
+      type: "business",
+      user_id: session.user.id,
+    }).select().single();
+    if (data) {
+      setExpenses(p => [data, ...p]);
+      await supabase.from("account_transactions").update({ imported_as_expense: true }).eq("id", tx.id);
+      setAccountTxs(p => p.map(t => t.id===tx.id ? {...t, imported_as_expense:true} : t));
+    }
+  };
+
   // ── Subscription gate ──
   const isActive = () => {
     if (!profile) return true; // still loading
@@ -972,10 +1104,10 @@ ${businessName}`
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
-  const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",bank:"⬡",charts:"◭"};
+  const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",accounts:"⬢",bank:"⬡",charts:"◭"};
   const SidebarContent=()=>(
     <>
       <div style={{marginBottom:28,paddingBottom:20,borderBottom:`1px solid ${C.border}`}}>
@@ -1013,12 +1145,14 @@ ${businessName}`
     </>
   );
 
+  const totalAccountBalance = connectedAccounts.reduce((s,a)=>s+(a.balance||0),0);
   const stats=[
     {label:"Collected",value:money(totalIncome),color:C.accent},
     {label:"Pending",value:money(totalPending),color:C.warning},
     {label:"Overdue",value:money(totalOverdue),color:C.danger},
     {label:"Expenses",value:money(totalExp),color:"#60A5FA"},
     {label:"Net Profit",value:money(netProfit),color:netProfit>=0?C.accent:C.danger},
+    ...(connectedAccounts.length>0?[{label:"Account Balance",value:money(totalAccountBalance),color:"#A78BFA"}]:[]),
   ];
 
   return (
@@ -1319,6 +1453,146 @@ ${businessName}`
                 </div>
               )}
 
+              {tab==="accounts"&&(
+                <div>
+                  <div style={{marginBottom:24}}>
+                    <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Connected Accounts</h1>
+                    <p style={{color:C.muted,fontSize:13,margin:0}}>Connect your payment accounts to auto-import transactions</p>
+                  </div>
+
+                  {/* Connect new account cards */}
+                  {connectedAccounts.length < 4 && (
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:28}}>
+
+                      {/* Wise */}
+                      {!connectedAccounts.find(a=>a.provider==="wise") && (
+                        <ConnectCard
+                          icon="🌍"
+                          name="Wise"
+                          desc="Connect your Wise account to auto-import transfers and see your balance."
+                          color="#4ADE80"
+                          onConnect={()=>setModal("connect-wise")}
+                        />
+                      )}
+
+                      {/* Stripe */}
+                      {!connectedAccounts.find(a=>a.provider==="stripe") && (
+                        <ConnectCard
+                          icon="⚡"
+                          name="Stripe"
+                          desc="Connect your Stripe account to track payouts and match them to invoices."
+                          color="#635bff"
+                          onConnect={connectStripe}
+                        />
+                      )}
+
+                      {/* PayPal - coming soon */}
+                      {!connectedAccounts.find(a=>a.provider==="paypal") && (
+                        <ConnectCard
+                          icon="🅿"
+                          name="PayPal"
+                          desc="Track PayPal income and auto-import transactions."
+                          color="#009cde"
+                          comingSoon
+                        />
+                      )}
+
+                      {/* Revolut - coming soon */}
+                      {!connectedAccounts.find(a=>a.provider==="revolut") && (
+                        <ConnectCard
+                          icon="🔄"
+                          name="Revolut"
+                          desc="Connect Revolut for automatic multi-currency transaction sync."
+                          color="#7B61FF"
+                          comingSoon
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Connected accounts */}
+                  {connectedAccounts.length > 0 && (
+                    <div style={{marginBottom:28}}>
+                      <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Connected</div>
+                      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+                        {connectedAccounts.map(acc => (
+                          <div key={acc.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,position:"relative",overflow:"hidden"}}>
+                            <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:acc.provider==="wise"?"#4ADE80":acc.provider==="stripe"?"#635bff":"#009cde"}}/>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                <div style={{width:36,height:36,borderRadius:10,background:C.bg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>
+                                  {acc.provider==="wise"?"🌍":acc.provider==="stripe"?"⚡":"🅿"}
+                                </div>
+                                <div>
+                                  <div style={{fontSize:14,fontWeight:700}}>{acc.account_name}</div>
+                                  <div style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>{acc.provider} · {acc.currency}</div>
+                                </div>
+                              </div>
+                              <span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:20,background:"#0a2018",color:C.accent,border:`1px solid ${C.accent}33`}}>LIVE</span>
+                            </div>
+                            <div style={{marginBottom:14}}>
+                              <div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Available Balance</div>
+                              <div style={{fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:800,color:C.text}}>{new Intl.NumberFormat("en-US",{style:"currency",currency:acc.currency||"USD"}).format(acc.balance||0)}</div>
+                              {acc.balance_updated_at && <div style={{fontSize:11,color:C.muted,marginTop:2}}>Updated {new Date(acc.balance_updated_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>}
+                            </div>
+                            <div style={{display:"flex",gap:8}}>
+                              <Btn variant="secondary" onClick={()=>syncAccount(acc.id,acc.provider)} disabled={accountsLoading} style={{flex:1,padding:"8px",fontSize:12}}>
+                                {accountsLoading?"Syncing...":"↻ Sync"}
+                              </Btn>
+                              <Btn variant="danger" onClick={()=>disconnectAccount(acc.id,acc.provider)} style={{padding:"8px 12px",fontSize:12}}>Disconnect</Btn>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transactions */}
+                  {accountTxs.length > 0 && (
+                    <div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Recent Transactions</div>
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:12,padding:"10px 16px",borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                          <div>Transaction</div>
+                          <div>Date</div>
+                          <div>Amount</div>
+                          <div>Action</div>
+                        </div>
+                        {accountTxs.slice(0,30).map((tx,i) => (
+                          <div key={tx.id} style={{display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:12,padding:"12px 16px",borderBottom:i<Math.min(accountTxs.length,30)-1?`1px solid ${C.border}88`:"none",alignItems:"center",transition:"background 0.15s"}}
+                            onMouseEnter={e=>e.currentTarget.style.background=C.surfaceHover}
+                            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                            <div>
+                              <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{tx.description}</div>
+                              <div style={{fontSize:11,color:C.muted}}>{tx.category}</div>
+                            </div>
+                            <div style={{fontSize:12,color:C.muted,whiteSpace:"nowrap"}}>{tx.date}</div>
+                            <div style={{fontSize:13,fontWeight:700,color:tx.type==="credit"?C.accent:C.danger,whiteSpace:"nowrap"}}>
+                              {tx.type==="credit"?"+":"-"}{new Intl.NumberFormat("en-US",{style:"currency",currency:tx.currency||"USD"}).format(tx.amount)}
+                            </div>
+                            <div>
+                              {tx.type==="debit" && !tx.imported_as_expense && (
+                                <Btn variant="secondary" onClick={()=>importTxAsExpense(tx)} style={{padding:"5px 10px",fontSize:11,whiteSpace:"nowrap"}}>+ Expense</Btn>
+                              )}
+                              {tx.imported_as_expense && <span style={{fontSize:11,color:C.muted}}>Added</span>}
+                              {tx.type==="credit" && <span style={{fontSize:11,color:C.accent}}>Income</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {connectedAccounts.length === 0 && accountTxs.length === 0 && (
+                    <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
+                      <div style={{fontSize:36,marginBottom:16}}>⬢</div>
+                      <div style={{fontSize:16,fontWeight:600,color:C.textDim,marginBottom:8}}>No accounts connected yet</div>
+                      <div style={{fontSize:13}}>Connect Wise or Stripe above to auto-import transactions</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {tab==="bank"&&(
                 <div>
                   <div style={{marginBottom:20}}>
@@ -1334,11 +1608,11 @@ ${businessName}`
                       <p style={{fontSize:13,color:C.textDim,marginBottom:16,lineHeight:1.6}}>Download your bank statement as CSV and upload it. Works with every bank worldwide.</p>
                       <Btn onClick={()=>setModal("csv-import")} style={{width:"100%",padding:"10px",fontSize:13}}>Upload CSV</Btn>
                     </div>
-                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:20,opacity:0.6}}>
-                      <div style={{fontSize:24,marginBottom:10}}>🔗</div>
-                      <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Auto Sync <span style={{fontSize:10,background:C.border,padding:"2px 7px",borderRadius:4,color:C.muted,fontWeight:600,marginLeft:4}}>COMING SOON</span></div>
-                      <p style={{fontSize:13,color:C.textDim,marginBottom:16,lineHeight:1.6}}>Connect your bank directly for automatic transaction sync. US & UK banks supported.</p>
-                      <Btn disabled style={{width:"100%",padding:"10px",fontSize:13}}>Coming Soon</Btn>
+                    <div style={{background:C.card,border:`1px solid ${C.accent}33`,borderRadius:12,padding:20}}>
+                      <div style={{fontSize:24,marginBottom:10}}>⬢</div>
+                      <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Auto Sync <span style={{fontSize:10,background:"#0a2018",padding:"2px 7px",borderRadius:4,color:C.accent,fontWeight:600,marginLeft:4,border:`1px solid ${C.accent}44`}}>NEW</span></div>
+                      <p style={{fontSize:13,color:C.textDim,marginBottom:16,lineHeight:1.6}}>Connect Wise or Stripe to automatically import transactions into Ledgr.</p>
+                      <Btn onClick={()=>goTab("accounts")} style={{width:"100%",padding:"10px",fontSize:13}}>Connect Accounts →</Btn>
                     </div>
                   </div>
 
@@ -1525,7 +1799,37 @@ ${businessName}`
   <TextInput label="Address (optional)" value={editClient.address||""} onChange={e=>setEditClient({...editClient,address:e.target.value})} placeholder="New York, NY"/>
   <TextInput label="Notes (optional)" value={editClient.notes||""} onChange={e=>setEditClient({...editClient,notes:e.target.value})} placeholder="e.g. Net 30 payment terms"/>
 </Modal>)}
-{modal==="profile"&&(<Modal title="My Profile" onClose={close} wide footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save Profile</Btn></div>}><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-4}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/><SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>{CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}</SelectInput></Modal>)}
+{modal==="connect-wise"&&(
+        <Modal title="Connect Wise" onClose={()=>{close();setWiseKey("");}} footer={
+          <div style={{display:"flex",gap:10}}>
+            <Btn variant="secondary" onClick={()=>{close();setWiseKey("");}} style={{flex:1}}>Cancel</Btn>
+            <Btn onClick={async()=>{if(!wiseKey.trim()){alert("Please enter your API key");return;}await connectWise(wiseKey.trim());close();setWiseKey("");}} style={{flex:1}} disabled={accountsLoading}>
+              {accountsLoading?"Connecting...":"Connect Wise"}
+            </Btn>
+          </div>
+        }>
+          <div style={{background:"#0d2018",border:"1px solid #4ADE8044",borderRadius:12,padding:16,marginBottom:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#4ADE80",marginBottom:8}}>How to get your Wise API key</div>
+            <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+              1. Log in to your Wise account<br/>
+              2. Go to <strong style={{color:"#F1F5F9"}}>Settings → Developer tools → API tokens</strong><br/>
+              3. Create a new token with <strong style={{color:"#F1F5F9"}}>Read only</strong> access<br/>
+              4. Copy and paste it below
+            </div>
+          </div>
+          <TextInput
+            label="Wise API Key"
+            value={wiseKey}
+            onChange={e=>setWiseKey(e.target.value)}
+            placeholder="Paste your Wise API key here"
+            type="password"
+          />
+          <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
+            Your key is stored securely and only used to read your balance and transactions. We never initiate transfers.
+          </p>
+        </Modal>
+      )}
+      {modal==="profile"&&(<Modal title="My Profile" onClose={close} wide footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save Profile</Btn></div>}><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-4}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/><SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>{CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}</SelectInput></Modal>)}
     </div>
   );
 }
