@@ -1168,7 +1168,7 @@ ${businessName}`
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",accounts:"⬢",bank:"⬡",charts:"◭"};
@@ -1265,6 +1265,45 @@ ${businessName}`
                 <div>
                   <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 6px",fontWeight:800,letterSpacing:"-0.02em"}}>Financial Overview</h1>
                   <p style={{color:C.muted,fontSize:13,marginBottom:28,fontWeight:400}}>Your money, all in one place.</p>
+
+                  {/* Onboarding checklist — show only if not fully set up */}
+                  {(()=>{
+                    const steps = [
+                      { id:"profile", label:"Complete your profile", desc:"Add your name so invoices look professional.", done:!!(profile?.name), action:()=>setModal("profile"), cta:"Set up profile" },
+                      { id:"client", label:"Add your first client", desc:"You'll need a client to create an invoice.", done:clients.length>0, action:()=>setModal("client"), cta:"Add client" },
+                      { id:"invoice", label:"Create your first invoice", desc:"Send a professional invoice in seconds.", done:invoices.length>0, action:()=>setModal("invoice"), cta:"Create invoice" },
+                      { id:"account", label:"Connect a payment account", desc:"See all your money in one place.", done:connectedAccounts.length>0, action:()=>setTab("accounts"), cta:"Connect account" },
+                    ];
+                    const doneCount = steps.filter(s=>s.done).length;
+                    if(doneCount===steps.length) return null; // fully onboarded, hide
+                    const pct = Math.round((doneCount/steps.length)*100);
+                    return(
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,marginBottom:24,position:"relative",overflow:"hidden"}}>
+                        <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${C.accent},${C.accent} ${pct}%,${C.border} ${pct}%)`}}/>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                          <div>
+                            <div style={{fontSize:15,fontWeight:700,marginBottom:2}}>Get started with Ledgr</div>
+                            <div style={{fontSize:12,color:C.muted}}>{doneCount} of {steps.length} steps complete</div>
+                          </div>
+                          <div style={{fontSize:22,fontWeight:800,color:C.accent,fontFamily:"'Playfair Display',serif"}}>{pct}%</div>
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                          {steps.map((s,i)=>(
+                            <div key={s.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:s.done?"transparent":C.bg,borderRadius:10,border:`1px solid ${s.done?C.border:C.border}`,opacity:s.done?0.5:1}}>
+                              <div style={{width:22,height:22,borderRadius:"50%",background:s.done?C.accent:C.border,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:11,fontWeight:700,color:s.done?"#060A0E":C.muted,transition:"all 0.3s"}}>
+                                {s.done?"✓":i+1}
+                              </div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:s.done?500:700,textDecoration:s.done?"line-through":"none",color:s.done?C.muted:C.text}}>{s.label}</div>
+                                {!s.done&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{s.desc}</div>}
+                              </div>
+                              {!s.done&&<button onClick={s.action} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,color:C.accent,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{s.cta} →</button>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:10,marginBottom:28}}>
                     {stats.map((s,i)=>(
                       <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px",position:"relative",overflow:"hidden",transition:"border-color 0.2s"}}>
@@ -1740,6 +1779,188 @@ ${businessName}`
                         </div>
                       </div>
                     )}
+                  </div>
+                );
+              })()}
+
+              {tab==="tax"&&(()=>{
+                const now = new Date();
+                const curYear = now.getFullYear();
+                // UK tax year: 6 Apr - 5 Apr. If before 6 Apr, current tax year started last calendar year
+                const taxYearStart = now >= new Date(curYear, 3, 6) ? new Date(curYear, 3, 6) : new Date(curYear-1, 3, 6);
+                const taxYearEnd = new Date(taxYearStart.getFullYear()+1, 3, 5);
+                const [taxYear, setTaxYear] = useState(taxYearStart.getFullYear());
+                const tyStart = new Date(taxYear, 3, 6);
+                const tyEnd = new Date(taxYear+1, 3, 5);
+                const fmtD = d => d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+                const inTY = date => { if(!date) return false; const d = new Date(date); return d >= tyStart && d <= tyEnd; };
+                const tyInvoices = invoices.filter(i => i.status==="paid" && inTY(i.due_date));
+                const tyExpenses = expenses.filter(e => inTY(e.date));
+                const totalIncome = tyInvoices.reduce((s,i)=>s+i.amount,0);
+                const totalExpenses = tyExpenses.reduce((s,e)=>s+e.amount,0);
+                const bizExpenses = tyExpenses.filter(e=>e.type==="business").reduce((s,e)=>s+e.amount,0);
+                const netProfit = totalIncome - bizExpenses;
+                // UK income tax estimate (simplified 2024/25)
+                const personalAllowance = 12570;
+                const taxableIncome = Math.max(0, netProfit - personalAllowance);
+                const incomeTax = taxableIncome <= 37700 ? taxableIncome * 0.20 : 37700 * 0.20 + (taxableIncome - 37700) * 0.40;
+                // Class 4 NI: 9% on profits £12,570-£50,270, 2% above
+                const ni = Math.max(0, Math.min(netProfit, 50270) - 12570) * 0.09 + Math.max(0, netProfit - 50270) * 0.02;
+                const totalTaxEst = incomeTax + ni;
+                // Expense categories
+                const expByCat = tyExpenses.filter(e=>e.type==="business").reduce((acc,e)=>{ acc[e.category||"Other"]=(acc[e.category||"Other"]||0)+e.amount; return acc; },{});
+                // Income by client
+                const incByClient = tyInvoices.reduce((acc,i)=>{ acc[i.client||"Unknown"]=(acc[i.client||"Unknown"]||0)+i.amount; return acc; },{});
+
+                const exportTaxCSV = () => {
+                  const rows = [
+                    ["LEDGR TAX REPORT"],
+                    [`Tax Year: ${taxYear}/${taxYear+1} (6 Apr ${taxYear} – 5 Apr ${taxYear+1})`],
+                    [`Generated: ${new Date().toLocaleDateString("en-GB")}`],
+                    [],
+                    ["SUMMARY"],
+                    ["Total Income", money(totalIncome, profile?.currency)],
+                    ["Total Business Expenses", money(bizExpenses, profile?.currency)],
+                    ["Net Profit", money(netProfit, profile?.currency)],
+                    ["Estimated Income Tax", money(incomeTax, profile?.currency)],
+                    ["Estimated Class 4 NI", money(ni, profile?.currency)],
+                    ["Total Tax Estimate", money(totalTaxEst, profile?.currency)],
+                    [],
+                    ["INCOME — PAID INVOICES"],
+                    ["Date","Client","Description","Amount"],
+                    ...tyInvoices.map(i=>[i.due_date,i.client,i.description,i.amount]),
+                    [],
+                    ["EXPENSES"],
+                    ["Date","Name","Category","Type","Amount"],
+                    ...tyExpenses.map(e=>[e.date,e.name,e.category,e.type,e.amount]),
+                  ];
+                  const csv = rows.map(r=>r.join(",")).join("\n");
+                  const blob = new Blob([csv], {type:"text/csv"});
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href=url; a.download=`ledgr-tax-${taxYear}-${taxYear+1}.csv`; a.click();
+                };
+
+                const years = [];
+                for(let y=curYear-2; y<=curYear; y++) years.push(y);
+
+                return(
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,gap:12,flexWrap:"wrap"}}>
+                      <div>
+                        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Tax Report</h1>
+                        <p style={{color:C.muted,fontSize:13,margin:0}}>{fmtD(tyStart)} – {fmtD(tyEnd)}</p>
+                      </div>
+                      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                        <select value={taxYear} onChange={e=>setTaxYear(Number(e.target.value))} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>
+                          {years.map(y=><option key={y} value={y}>{y}/{y+1}</option>)}
+                        </select>
+                        <Btn onClick={exportTaxCSV} style={{padding:"10px 16px",fontSize:13}}>⬇ Export CSV</Btn>
+                      </div>
+                    </div>
+
+                    {/* UK deadline banner */}
+                    <div style={{background:"#1a0f00",border:"1px solid #3a2000",borderRadius:12,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"center",gap:12}}>
+                      <span style={{fontSize:18}}>📅</span>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:C.warning}}>UK Self Assessment deadline: 31 January {taxYear+2}</div>
+                        <div style={{fontSize:12,color:C.muted}}>These figures are estimates only — always confirm with your accountant.</div>
+                      </div>
+                    </div>
+
+                    {/* Summary cards */}
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                      {[
+                        {label:"Total Income",val:money(totalIncome,profile?.currency),color:C.accent,sub:`${tyInvoices.length} paid invoices`},
+                        {label:"Business Expenses",val:money(bizExpenses,profile?.currency),color:C.danger,sub:`${tyExpenses.filter(e=>e.type==="business").length} items`},
+                        {label:"Net Profit",val:money(netProfit,profile?.currency),color:"#60A5FA",sub:`${Math.round(totalIncome>0?(netProfit/totalIncome)*100:0)}% margin`},
+                        {label:"Est. Tax + NI",val:money(totalTaxEst,profile?.currency),color:C.warning,sub:"Simplified UK estimate"},
+                      ].map((s,i)=>(
+                        <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,position:"relative",overflow:"hidden"}}>
+                          <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${s.color}55,transparent)`}}/>
+                          <div style={{color:C.muted,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>{s.label}</div>
+                          <div style={{color:s.color,fontSize:isMobile?15:20,fontWeight:800,fontFamily:"'Playfair Display',serif",lineHeight:1,marginBottom:4}}>{s.val}</div>
+                          <div style={{color:C.muted,fontSize:11}}>{s.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16,marginBottom:16}}>
+                      {/* Tax breakdown */}
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                        <h3 style={{margin:"0 0 16px",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.textDim}}>Tax Estimate Breakdown</h3>
+                        {[
+                          {label:"Net Profit",val:netProfit,note:""},
+                          {label:"Personal Allowance",val:-personalAllowance,note:"2024/25"},
+                          {label:"Taxable Income",val:taxableIncome,note:""},
+                          {label:"Income Tax (20%/40%)",val:incomeTax,note:""},
+                          {label:"Class 4 NI (9%/2%)",val:ni,note:""},
+                        ].map((r,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                            <div style={{fontSize:13,color:i===4?C.text:C.muted}}>{r.label}{r.note&&<span style={{fontSize:10,color:C.muted,marginLeft:6}}>{r.note}</span>}</div>
+                            <div style={{fontSize:14,fontWeight:700,color:r.val<0?C.accent:r.label.includes("Tax")||r.label.includes("NI")?C.warning:C.text}}>{r.val<0?"−":""}{money(Math.abs(r.val),profile?.currency)}</div>
+                          </div>
+                        ))}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0 0"}}>
+                          <div style={{fontSize:14,fontWeight:700}}>Total Estimated Tax</div>
+                          <div style={{fontSize:18,fontWeight:800,color:C.warning,fontFamily:"'Playfair Display',serif"}}>{money(totalTaxEst,profile?.currency)}</div>
+                        </div>
+                        <div style={{marginTop:12,padding:"10px 12px",background:"#0a0f18",borderRadius:8,fontSize:11,color:C.muted,lineHeight:1.6}}>
+                          💡 Set aside <strong style={{color:C.text}}>{Math.round(totalIncome>0?(totalTaxEst/totalIncome)*100:0)}%</strong> of each payment for tax. Consult an accountant for your exact liability.
+                        </div>
+                      </div>
+
+                      {/* Expense by category */}
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                        <h3 style={{margin:"0 0 16px",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.textDim}}>Expenses by Category</h3>
+                        {Object.keys(expByCat).length===0&&<p style={{color:C.muted,fontSize:13}}>No business expenses this year.</p>}
+                        {Object.entries(expByCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{width:8,height:8,borderRadius:2,background:["#4ADE80","#60A5FA","#FBBF24","#F87171","#C084FC","#34D399"][i%6]}}/>
+                              <span style={{fontSize:13,color:C.muted}}>{cat}</span>
+                            </div>
+                            <div style={{fontSize:13,fontWeight:700}}>{money(amt,profile?.currency)}</div>
+                          </div>
+                        ))}
+                        {Object.keys(expByCat).length>0&&(
+                          <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0"}}>
+                            <span style={{fontSize:13,fontWeight:700}}>Total</span>
+                            <span style={{fontSize:14,fontWeight:800,color:C.danger}}>{money(bizExpenses,profile?.currency)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Income by client */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,marginBottom:16}}>
+                      <h3 style={{margin:"0 0 16px",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.textDim}}>Income by Client</h3>
+                      {Object.keys(incByClient).length===0&&<p style={{color:C.muted,fontSize:13}}>No paid invoices this tax year yet.</p>}
+                      {Object.entries(incByClient).sort((a,b)=>b[1]-a[1]).map(([client,amt],i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                          <div style={{fontSize:14,fontWeight:600}}>{client}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}>
+                            <div style={{fontSize:11,color:C.muted}}>{Math.round((amt/totalIncome)*100)}%</div>
+                            <div style={{fontSize:14,fontWeight:700,color:C.accent}}>{money(amt,profile?.currency)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Paid invoices list */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                      <h3 style={{margin:"0 0 16px",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.textDim}}>Paid Invoices This Year ({tyInvoices.length})</h3>
+                      {tyInvoices.length===0&&<p style={{color:C.muted,fontSize:13}}>No paid invoices in this tax year.</p>}
+                      {tyInvoices.map((inv,i)=>(
+                        <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:i<tyInvoices.length-1?`1px solid ${C.border}`:"none"}}>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:600}}>{inv.client}</div>
+                            <div style={{fontSize:11,color:C.muted}}>{inv.description} · {inv.due_date}</div>
+                          </div>
+                          <div style={{fontSize:14,fontWeight:700,color:C.accent}}>{money(inv.amount,profile?.currency)}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })()}
