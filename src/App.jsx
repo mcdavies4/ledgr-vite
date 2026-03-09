@@ -736,6 +736,8 @@ export default function App() {
   const [newExp, setNewExp] = useState({ name:"", amount:"", category:"", date:"", type:"business" });
   const [newAlr, setNewAlr] = useState({ label:"", amount:"", due_date:"", type:"personal" });
   const [editPro, setEditPro] = useState({ name:"", email:"", phone:"", address:"" });
+  const _now = new Date(); const _curY = _now.getFullYear();
+  const [taxYear, setTaxYear] = useState(_now >= new Date(_curY,3,6) ? _curY : _curY-1);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthLoading(false); });
@@ -1786,10 +1788,7 @@ ${businessName}`
               {tab==="tax"&&(()=>{
                 const now = new Date();
                 const curYear = now.getFullYear();
-                // UK tax year: 6 Apr - 5 Apr. If before 6 Apr, current tax year started last calendar year
-                const taxYearStart = now >= new Date(curYear, 3, 6) ? new Date(curYear, 3, 6) : new Date(curYear-1, 3, 6);
-                const taxYearEnd = new Date(taxYearStart.getFullYear()+1, 3, 5);
-                const [taxYear, setTaxYear] = useState(taxYearStart.getFullYear());
+                // UK tax year: 6 Apr - 5 Apr.
                 const tyStart = new Date(taxYear, 3, 6);
                 const tyEnd = new Date(taxYear+1, 3, 5);
                 const fmtD = d => d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
@@ -1842,7 +1841,7 @@ ${businessName}`
                 };
 
                 const years = [];
-                for(let y=curYear-2; y<=curYear; y++) years.push(y);
+                for(let y=_curY-2; y<=_curY; y++) years.push(y);
 
                 return(
                   <div>
