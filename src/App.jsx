@@ -801,22 +801,46 @@ export default function App() {
   const markPaid = async (id) => { await supabase.from("invoices").update({status:"paid"}).eq("id",id); setInvoices(p=>p.map(x=>x.id===id?{...x,status:"paid"}:x)); };
   const [linkLoading, setLinkLoading] = useState(null); // invoice id being processed
   const [linkCopied, setLinkCopied] = useState(null);
+  const getOrCreatePayLink = async (inv) => {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-url`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+      body: JSON.stringify({ invoice_id: inv.id, user_id: session.user.id }),
+    });
+    const { url, error } = await res.json();
+    if (error) throw new Error(error);
+    setInvoices(p => p.map(x => x.id===inv.id ? {...x, payment_link: url} : x));
+    return url;
+  };
   const sendPaymentLink = async (inv) => {
     setLinkLoading(inv.id);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/get-stripe-url`, {
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
-        body: JSON.stringify({ invoice_id: inv.id, user_id: session.user.id }),
-      });
-      const { url, error } = await res.json();
-      if (error) throw new Error(error);
-      // Copy to clipboard
+      const url = await getOrCreatePayLink(inv);
       await navigator.clipboard.writeText(url);
       setLinkCopied(inv.id);
       setTimeout(() => setLinkCopied(null), 3000);
-      // Also update local state with payment_link
-      setInvoices(p => p.map(x => x.id===inv.id ? {...x, payment_link: url} : x));
+    } catch(e) { alert("Could not generate payment link: " + e.message); }
+    setLinkLoading(null);
+  };
+  const emailPaymentLink = async (inv) => {
+    setLinkLoading(inv.id + "-email");
+    try {
+      const url = await getOrCreatePayLink(inv);
+      const businessName = profile?.name || "your service provider";
+      const amount = new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(inv.amount);
+      const subject = encodeURIComponent(`Invoice for ${amount} from ${businessName}`);
+      const body = encodeURIComponent(
+`Hi ${inv.client},
+
+Please find your invoice for ${amount} below.
+
+${inv.description ? "Description: " + inv.description + "\n\n" : ""}You can pay securely online here:
+${url}
+
+Thank you,
+${businessName}`
+      );
+      window.open(`mailto:?subject=${subject}&body=${body}`, "_self");
     } catch(e) { alert("Could not generate payment link: " + e.message); }
     setLinkLoading(null);
   };
@@ -1107,8 +1131,11 @@ export default function App() {
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 14px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 14px",fontSize:12,flex:1}}>Mark Paid</Btn>}
-                          {inv.status!=="paid"&&<Btn variant="secondary" onClick={()=>sendPaymentLink(inv)} disabled={linkLoading===inv.id} style={{padding:"8px 14px",fontSize:12,flex:1,color:linkCopied===inv.id?"#4ADE80":C.blue,border:`1px solid ${linkCopied===inv.id?"#4ADE8044":C.blue+"44"}`}}>
-                            {linkLoading===inv.id?"..." : linkCopied===inv.id ? "✓ Copied!" : "Send Link"}
+                          {inv.status!=="paid"&&<Btn variant="secondary" onClick={()=>sendPaymentLink(inv)} disabled={!!linkLoading} style={{padding:"8px 14px",fontSize:12,flex:1,color:linkCopied===inv.id?"#4ADE80":C.blue,border:`1px solid ${linkCopied===inv.id?"#4ADE8044":C.blue+"44"}`}}>
+                            {linkLoading===inv.id?"..." : linkCopied===inv.id ? "✓ Copied!" : "🔗 Copy Link"}
+                          </Btn>}
+                          {inv.status!=="paid"&&<Btn variant="secondary" onClick={()=>emailPaymentLink(inv)} disabled={!!linkLoading} style={{padding:"8px 14px",fontSize:12,flex:1,color:"#FBBF24",border:"1px solid #FBBF2444"}}>
+                            {linkLoading===inv.id+"-email" ? "..." : "✉ Email"}
                           </Btn>}
                           <Btn variant="danger" onClick={()=>delInvoice(inv.id)} style={{padding:"8px 12px",fontSize:12}}>Delete</Btn>
                         </div>
