@@ -13,14 +13,5 @@ export default defineConfig({
         },
       },
     },
-    minify: 'esbuild',
-    sourcemap: false,
-    cssCodeSplit: true,
-  },
-  optimizeDeps: {
-    include: ['react', 'react-dom', '@supabase/supabase-js'],
-  },
-  esbuild: {
-    drop: ['console', 'debugger'],
   },
 })
