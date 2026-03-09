@@ -401,6 +401,133 @@ function LandingPage({ onGetStarted }) {
   );
 }
 
+
+// ── Admin Dashboard ───────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://phjybvphmlzghdebonzy.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoanlidnBobWx6Z2hkZWJvbnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTI2MDIsImV4cCI6MjA4ODE2ODYwMn0.6r7C6aQPn0YTjmDjRkP8fVd6cQhXJ_L1jBYqsu2qRWM";
+const ADMIN_EMAIL = "azubuikedavies@gmail.com";
+
+function AdminDashboard({ session, onExit }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-stats`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON}`, "apikey": SUPABASE_ANON },
+          body: JSON.stringify({ email: session.user.email }),
+        });
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        setData(json);
+      } catch(e) { setError(e.message); }
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const fmtDate = d => d ? new Date(d).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" }) : "-";
+  const statusColor = s => s==="active"?"#4ADE80":s==="trialing"?"#FBBF24":s==="canceled"?"#F87171":"#8B95A8";
+  const statusBg = s => s==="active"?"#0a2018":s==="trialing"?"#1f1508":s==="canceled"?"#1f0808":"#141A22";
+
+  const filtered = (data?.users||[]).filter(u =>
+    u.email.toLowerCase().includes(search.toLowerCase()) ||
+    u.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div style={{minHeight:"100vh",background:"#080B10",color:"#F1F5F9",fontFamily:"'DM Sans',sans-serif"}}>
+      {/* Header */}
+      <div style={{background:"#0F1318",borderBottom:"1px solid #1E2535",padding:"16px 32px",display:"flex",alignItems:"center",gap:16}}>
+        <div style={{width:32,height:32,background:"linear-gradient(135deg,#4ADE80,#22c55e)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#060A0E"}}>L</div>
+        <div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:800}}>Ledgr Admin</div>
+          <div style={{fontSize:11,color:"#4B5563"}}>Signed in as {session.user.email}</div>
+        </div>
+        <button onClick={onExit} style={{marginLeft:"auto",background:"#141A22",border:"1px solid #1E2535",color:"#8B95A8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+          Back to App
+        </button>
+      </div>
+
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 24px"}}>
+        {loading && <div style={{textAlign:"center",padding:60,color:"#4B5563"}}>Loading users...</div>}
+        {error && <div style={{background:"#1f0808",border:"1px solid #F8717144",borderRadius:12,padding:20,color:"#F87171"}}>{error}</div>}
+
+        {data && (
+          <>
+            {/* Stats row */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:32}}>
+              {[
+                {label:"Total Users", value:data.stats.total_users, color:"#F1F5F9"},
+                {label:"Active Subs", value:data.stats.active_subs, color:"#4ADE80"},
+                {label:"On Trial", value:data.stats.trialing, color:"#FBBF24"},
+                {label:"Churned", value:data.stats.churned, color:"#F87171"},
+                {label:"MRR", value:`$${data.stats.mrr}`, color:"#4ADE80"},
+              ].map((s,i) => (
+                <div key={i} style={{background:"#141A22",border:"1px solid #1E2535",borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${s.color}55,transparent)`}}/>
+                  <div style={{fontSize:9,fontWeight:700,color:"#4B5563",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>{s.label}</div>
+                  <div style={{fontSize:26,fontWeight:800,color:s.color,fontFamily:"'Playfair Display',serif"}}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Search */}
+            <div style={{marginBottom:16}}>
+              <input
+                value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="Search by email or name..."
+                style={{width:"100%",maxWidth:400,background:"#0F1318",border:"1px solid #1E2535",borderRadius:10,padding:"10px 14px",color:"#F1F5F9",fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+                onFocus={e=>e.target.style.borderColor="#4ADE8088"}
+                onBlur={e=>e.target.style.borderColor="#1E2535"}
+              />
+            </div>
+
+            {/* Users table */}
+            <div style={{background:"#0F1318",border:"1px solid #1E2535",borderRadius:16,overflow:"hidden"}}>
+              <div style={{padding:"14px 20px",borderBottom:"1px solid #1E2535",display:"grid",gridTemplateColumns:"2fr 1fr 1fr 80px 80px 80px",gap:12,fontSize:10,fontWeight:700,color:"#4B5563",textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                <div>User</div>
+                <div>Joined</div>
+                <div>Trial ends</div>
+                <div>Status</div>
+                <div>Invoices</div>
+                <div>Expenses</div>
+              </div>
+              {filtered.length === 0 && (
+                <div style={{padding:40,textAlign:"center",color:"#4B5563"}}>No users found.</div>
+              )}
+              {filtered.map((u,i) => (
+                <div key={u.id} style={{padding:"14px 20px",borderBottom:i<filtered.length-1?"1px solid #1E253588":"none",display:"grid",gridTemplateColumns:"2fr 1fr 1fr 80px 80px 80px",gap:12,alignItems:"center",transition:"background 0.15s"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#141A22"}
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{u.email}</div>
+                    {u.name && <div style={{fontSize:11,color:"#4B5563"}}>{u.name}</div>}
+                  </div>
+                  <div style={{fontSize:12,color:"#8B95A8"}}>{fmtDate(u.created_at)}</div>
+                  <div style={{fontSize:12,color:"#8B95A8"}}>{fmtDate(u.trial_ends_at)}</div>
+                  <div>
+                    <span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:20,background:statusBg(u.subscription_status),color:statusColor(u.subscription_status),border:`1px solid ${statusColor(u.subscription_status)}33`,whiteSpace:"nowrap"}}>
+                      {u.subscription_status||"trialing"}
+                    </span>
+                  </div>
+                  <div style={{fontSize:13,fontWeight:600,color:"#8B95A8",textAlign:"center"}}>{u.invoices}</div>
+                  <div style={{fontSize:13,fontWeight:600,color:"#8B95A8",textAlign:"center"}}>{u.expenses}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{marginTop:10,fontSize:12,color:"#4B5563",textAlign:"right"}}>{filtered.length} of {data.users.length} users</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Auth Screen ───────────────────────────────────────────────────────────────
 function AuthScreen({ initialMode="login" }) {
   const [mode, setMode] = useState(initialMode);
@@ -781,7 +908,10 @@ export default function App() {
       </div>
     </div>
   );
+  const isAdmin = session?.user?.email === ADMIN_EMAIL;
+  const [showAdmin, setShowAdmin] = useState(false);
   if (!session) return <LandingOrAuth/>;
+  if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
   const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"}];
@@ -819,6 +949,7 @@ export default function App() {
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,marginTop:16}}>
         {profile?.subscription_status==="active"&&<div style={{fontSize:11,color:C.accent,fontWeight:700,padding:"6px 12px",marginBottom:8,background:C.accentDim,borderRadius:8,display:"flex",alignItems:"center",gap:6}}><span>✓</span> Pro</div>}
         <button onClick={()=>{setEditPro(profile||{});setModal("profile");setSidebarOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:2,transition:"all 0.15s"}}>⚙ Profile</button>
+        {isAdmin&&<button onClick={()=>setShowAdmin(true)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:C.accentDim,color:C.accent,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:4,fontWeight:700}}>◈ Admin</button>}
         <button onClick={signOut} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.danger,fontSize:12,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>⎋ Sign out</button>
       </div>
     </>
