@@ -1618,7 +1618,7 @@ ${businessName}`
                         <ConnectCard
                           icon="🔄"
                           name="Revolut"
-                          desc="Connect Revolut Business or Personal to sync multi-currency transactions."
+                          desc="Connect Revolut Business to sync multi-currency transactions."
                           color="#7B61FF"
                           onConnect={()=>setModal("connect-revolut")}
                         />
@@ -2234,50 +2234,39 @@ ${businessName}`
             <Btn variant="secondary" onClick={()=>{close();setRevolutKey("");setRevolutType("business");}} style={{flex:1}}>Cancel</Btn>
             <Btn onClick={async()=>{
               if(!revolutKey.trim()){alert("Please enter your API key");return;}
-              await connectRevolut(revolutKey.trim(), revolutType);
+              await connectRevolut(revolutKey.trim(), "business");
               close();setRevolutKey("");setRevolutType("business");
             }} style={{flex:1,background:"#7B61FF",boxShadow:"none"}} disabled={accountsLoading}>
-              {accountsLoading?"Connecting...":"Connect Revolut"}
+              {accountsLoading?"Connecting...":"Connect Revolut Business"}
             </Btn>
           </div>
         }>
-          {/* Account type toggle */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
-            {["business","personal"].map(t=>(
-              <button key={t} onClick={()=>setRevolutType(t)} style={{padding:"10px",borderRadius:10,border:`1px solid ${revolutType===t?"#7B61FF":"#1E2535"}`,background:revolutType===t?"#1a1630":"transparent",color:revolutType===t?"#a5a0ff":"#8B95A8",fontSize:13,fontWeight:revolutType===t?700:400,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textTransform:"capitalize",transition:"all 0.15s"}}>
-                {t==="business"?"🏢 Business":"👤 Personal"}
-              </button>
-            ))}
+          {/* Business only info */}
+          <div style={{background:"#0f0a1f",border:"1px solid #7B61FF44",borderRadius:12,padding:16,marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#a5a0ff",marginBottom:8}}>How to get your Revolut Business API key</div>
+            <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+              1. Log in to <strong style={{color:"#F1F5F9"}}>business.revolut.com</strong><br/>
+              2. Go to <strong style={{color:"#F1F5F9"}}>Settings → API</strong><br/>
+              3. Click <strong style={{color:"#F1F5F9"}}>Generate API key</strong><br/>
+              4. Set access to <strong style={{color:"#F1F5F9"}}>Read only</strong><br/>
+              5. Copy and paste the key below
+            </div>
           </div>
 
-          {revolutType==="business" ? (
-            <div style={{background:"#0f0a1f",border:"1px solid #7B61FF44",borderRadius:12,padding:16,marginBottom:20}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#a5a0ff",marginBottom:8}}>How to get your Revolut Business API key</div>
-              <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
-                1. Log in to <strong style={{color:"#F1F5F9"}}>business.revolut.com</strong><br/>
-                2. Go to <strong style={{color:"#F1F5F9"}}>Settings → API</strong><br/>
-                3. Click <strong style={{color:"#F1F5F9"}}>Generate API key</strong><br/>
-                4. Set access to <strong style={{color:"#F1F5F9"}}>Read only</strong><br/>
-                5. Copy and paste the key below
-              </div>
+          {/* Personal account notice */}
+          <div style={{background:"#1a0f00",border:"1px solid #3a2000",borderRadius:12,padding:14,marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
+            <span style={{fontSize:16,flexShrink:0}}>ℹ️</span>
+            <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+              <strong style={{color:"#FBBF24"}}>Revolut Personal not supported.</strong><br/>
+              Revolut's Personal API requires regulated financial institution certificates (OBIE/eIDAS) — it's not accessible to individual users. Only <strong style={{color:"#F1F5F9"}}>Revolut Business</strong> accounts can connect to Ledgr. You can upgrade to a free Revolut Business account at <strong style={{color:"#F1F5F9"}}>business.revolut.com</strong>.
             </div>
-          ) : (
-            <div style={{background:"#0f0a1f",border:"1px solid #7B61FF44",borderRadius:12,padding:16,marginBottom:20}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#a5a0ff",marginBottom:8}}>How to get your Revolut Personal access token</div>
-              <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
-                1. Open the <strong style={{color:"#F1F5F9"}}>Revolut app</strong> on your phone<br/>
-                2. Go to <strong style={{color:"#F1F5F9"}}>Profile → Security & Privacy</strong><br/>
-                3. Tap <strong style={{color:"#F1F5F9"}}>Open Banking</strong><br/>
-                4. Create a new access token and copy it below
-              </div>
-            </div>
-          )}
+          </div>
 
           <TextInput
-            label={revolutType==="business" ? "Revolut Business API Key" : "Revolut Personal Access Token"}
+            label="Revolut Business API Key"
             value={revolutKey}
             onChange={e=>setRevolutKey(e.target.value)}
-            placeholder={revolutType==="business" ? "Enter your API key..." : "Enter your access token..."}
+            placeholder="Enter your Business API key..."
             type="password"
           />
           <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
