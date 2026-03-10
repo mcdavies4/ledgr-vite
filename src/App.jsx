@@ -750,6 +750,8 @@ export default function App() {
 
   // Handle ?success=true from Stripe redirect - poll until subscription is active
   const [stripeSuccess, setStripeSuccess] = useState(false);
+  const [stripeConnectSuccess, setStripeConnectSuccess] = useState(false);
+  const [stripeConnectError, setStripeConnectError] = useState("");
   const [showAdmin, setShowAdmin] = useState(false);
   const isAdmin = session?.user?.email === ADMIN_EMAIL;
   useEffect(() => {
@@ -757,6 +759,16 @@ export default function App() {
     if (params.get("success") === "true") {
       window.history.replaceState({}, "", window.location.pathname);
       setStripeSuccess(true);
+    }
+    if (params.get("stripe_connect") === "success") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setStripeConnectSuccess(true);
+      // Reload profile to pick up new stripe_account_id
+      setTimeout(() => loadAll(), 1500);
+    }
+    if (params.get("stripe_connect") === "error") {
+      window.history.replaceState({}, "", window.location.pathname);
+      setStripeConnectError(params.get("msg") || "Stripe connection failed.");
     }
   }, []);
 
@@ -1005,6 +1017,30 @@ ${businessName}`
   };
   const saveProfile = async () => { await supabase.from("profiles").upsert({...editPro,id:session.user.id}); setProfile(editPro); if(editPro.currency) setCurrencyStore(editPro.currency); close(); };
   const signOut = () => supabase.auth.signOut();
+
+  const connectStripeOAuth = async () => {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/stripe-connect-onboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON}`, "apikey": SUPABASE_ANON },
+        body: JSON.stringify({ user_id: session.user.id }),
+      });
+      const { url, error } = await res.json();
+      if (error) throw new Error(error);
+      window.location.href = url; // redirect to Stripe OAuth
+    } catch(e) { alert("Could not start Stripe Connect: " + e.message); }
+  };
+
+  const disconnectStripeConnect = async () => {
+    if (!confirm("Disconnect your Stripe account? Payment links will stop working until you reconnect.")) return;
+    await supabase.from("profiles").update({
+      stripe_account_id: null,
+      stripe_access_token: null,
+      stripe_connected_at: null,
+      stripe_account_name: null,
+    }).eq("id", session.user.id);
+    setProfile(p => ({ ...p, stripe_account_id: null, stripe_account_name: null }));
+  };
 
   // ── Accounts ──────────────────────────────────────────────────────
   const loadAccounts = async () => {
@@ -1403,10 +1439,15 @@ ${businessName}`
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 14px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 14px",fontSize:12,flex:1}}>Mark Paid</Btn>}
-                          {inv.status!=="paid"&&<Btn variant="secondary" onClick={()=>sendPaymentLink(inv)} disabled={!!linkLoading} style={{padding:"8px 14px",fontSize:12,flex:1,color:linkCopied===inv.id?"#4ADE80":C.blue,border:`1px solid ${linkCopied===inv.id?"#4ADE8044":C.blue+"44"}`}}>
+                          {inv.status!=="paid"&&!profile?.stripe_account_id&&(
+                            <Btn variant="secondary" onClick={()=>setModal("profile")} style={{padding:"8px 14px",fontSize:12,flex:1,color:"#FBBF24",border:"1px solid #FBBF2444"}} title="Connect Stripe in Profile to enable payment links">
+                              ⚡ Connect Stripe
+                            </Btn>
+                          )}
+                          {inv.status!=="paid"&&profile?.stripe_account_id&&<Btn variant="secondary" onClick={()=>sendPaymentLink(inv)} disabled={!!linkLoading} style={{padding:"8px 14px",fontSize:12,flex:1,color:linkCopied===inv.id?"#4ADE80":C.blue,border:`1px solid ${linkCopied===inv.id?"#4ADE8044":C.blue+"44"}`}}>
                             {linkLoading===inv.id?"..." : linkCopied===inv.id ? "✓ Copied!" : "🔗 Copy Link"}
                           </Btn>}
-                          {inv.status!=="paid"&&<Btn variant="secondary" onClick={()=>emailPaymentLink(inv)} disabled={!!linkLoading} style={{padding:"8px 14px",fontSize:12,flex:1,color:"#FBBF24",border:"1px solid #FBBF2444"}}>
+                          {inv.status!=="paid"&&profile?.stripe_account_id&&<Btn variant="secondary" onClick={()=>emailPaymentLink(inv)} disabled={!!linkLoading} style={{padding:"8px 14px",fontSize:12,flex:1,color:"#FBBF24",border:"1px solid #FBBF2444"}}>
                             {linkLoading===inv.id+"-email" ? "..." : "✉ Email"}
                           </Btn>}
                           {inv.status!=="paid"&&inv.client_email&&(
@@ -1623,14 +1664,14 @@ ${businessName}`
                         />
                       )}
 
-                      {/* Stripe */}
-                      {!connectedAccounts.find(a=>a.provider==="stripe") && (
+                      {/* Stripe — now via Connect OAuth in Profile settings */}
+                      {!profile?.stripe_account_id && (
                         <ConnectCard
                           icon="⚡"
                           name="Stripe"
-                          desc="Connect your Stripe account to track payouts and match them to invoices."
+                          desc="Connect Stripe to enable payment links on invoices. Set up in your Profile settings."
                           color="#635bff"
-                          onConnect={()=>setModal("connect-stripe")}
+                          onConnect={()=>setModal("profile")}
                         />
                       )}
 
@@ -2489,7 +2530,82 @@ ${businessName}`
           </p>
         </Modal>
       )}
-      {modal==="profile"&&(<Modal title="My Profile" onClose={close} wide footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={saveProfile} style={{flex:1}}>Save Profile</Btn></div>}><p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-4}}>This info appears on your PDF invoices.</p><TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/><TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/><TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/><TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/><SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>{CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}</SelectInput></Modal>)}
+      {modal==="profile"&&(
+        <Modal title="My Profile" onClose={close} wide footer={
+          <div style={{display:"flex",gap:10}}>
+            <Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn>
+            <Btn onClick={saveProfile} style={{flex:1}}>Save Profile</Btn>
+          </div>
+        }>
+          <p style={{color:C.muted,fontSize:13,marginBottom:16,marginTop:-4}}>This info appears on your PDF invoices.</p>
+          <TextInput label="Full Name" value={editPro.name||""} onChange={e=>setEditPro({...editPro,name:e.target.value})} placeholder="Jane Doe"/>
+          <TextInput label="Business Name (optional)" value={editPro.business_name||""} onChange={e=>setEditPro({...editPro,business_name:e.target.value})} placeholder="Jane Doe Creative Ltd"/>
+          <TextInput label="Email" value={editPro.email||""} onChange={e=>setEditPro({...editPro,email:e.target.value})} placeholder="jane@email.com"/>
+          <TextInput label="Phone (optional)" value={editPro.phone||""} onChange={e=>setEditPro({...editPro,phone:e.target.value})} placeholder="+1 555 000 1234"/>
+          <TextInput label="Address" value={editPro.address||""} onChange={e=>setEditPro({...editPro,address:e.target.value})} placeholder="New York, NY"/>
+          <SelectInput label="Currency" value={editPro.currency||"USD"} onChange={e=>setEditPro({...editPro,currency:e.target.value})}>
+            {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}
+          </SelectInput>
+
+          {/* ── Stripe Connect ── */}
+          <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:6}}>Payment Collection</div>
+            <div style={{fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:14}}>
+              Connect your Stripe account so clients can pay your invoices directly to you. Money goes straight to your Stripe — not through Ledgr.
+            </div>
+
+            {stripeConnectSuccess && (
+              <div style={{background:"#0d2018",border:"1px solid #4ADE8033",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:C.accent}}>
+                ✓ Stripe account connected successfully!
+              </div>
+            )}
+            {stripeConnectError && (
+              <div style={{background:"#2a0f0f",border:"1px solid #F8717133",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:C.danger}}>
+                ✕ {stripeConnectError}
+              </div>
+            )}
+
+            {profile?.stripe_account_id ? (
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:"#0d2018",border:`1px solid ${C.accent}33`,borderRadius:12,marginBottom:10}}>
+                  <span style={{fontSize:18}}>⚡</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.accent}}>Stripe Connected</div>
+                    <div style={{fontSize:11,color:C.muted,fontFamily:"monospace",marginTop:2}}>
+                      {profile.stripe_account_name || profile.stripe_account_id}
+                    </div>
+                  </div>
+                  <span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:20,background:"#0a2018",color:C.accent,border:`1px solid ${C.accent}33`}}>LIVE</span>
+                </div>
+                <div style={{fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.6}}>
+                  Payment links on your invoices go directly to this Stripe account.
+                </div>
+                <Btn variant="danger" onClick={disconnectStripeConnect} style={{fontSize:12,padding:"8px 16px"}}>
+                  Disconnect Stripe
+                </Btn>
+              </div>
+            ) : (
+              <div>
+                <div style={{padding:"12px 16px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:12}}>
+                  <div style={{fontSize:12,color:C.muted,lineHeight:1.7}}>
+                    <strong style={{color:C.text}}>How it works:</strong><br/>
+                    1. Click Connect Stripe below<br/>
+                    2. Sign in to your Stripe account (or create one free)<br/>
+                    3. Authorise Ledgr — takes 30 seconds<br/>
+                    4. All invoice payment links charge directly to your Stripe
+                  </div>
+                </div>
+                <Btn onClick={connectStripeOAuth} style={{background:"#635bff",boxShadow:"none",width:"100%"}}>
+                  ⚡ Connect Stripe Account
+                </Btn>
+                <p style={{fontSize:11,color:C.muted,marginTop:8,lineHeight:1.6}}>
+                  Don't have Stripe? You'll be able to create a free account during the flow. Stripe is available in 46 countries.
+                </p>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
