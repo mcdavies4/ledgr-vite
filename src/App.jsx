@@ -717,6 +717,7 @@ export default function App() {
   const [paypalSecret, setPaypalSecret] = useState("");
   const [revolutKey, setRevolutKey] = useState("");
   const [revolutType, setRevolutType] = useState("business");
+  const [flutterwaveKey, setFlutterwaveKey] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
 
   const [csvRows, setCsvRows] = useState([]);
@@ -1032,6 +1033,21 @@ ${businessName}`
     setAccountsLoading(false);
   };
 
+  const connectFlutterwave = async (apiKey) => {
+    setAccountsLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/connect-flutterwave`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({ action:"connect", user_id:session.user.id, api_key:apiKey }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      await loadAccounts();
+    } catch(e) { alert("Flutterwave connection failed: " + e.message); }
+    setAccountsLoading(false);
+  };
+
   const connectPaypal = async (clientId, secret) => {
     setAccountsLoading(true);
     try {
@@ -1080,7 +1096,7 @@ ${businessName}`
   const syncAccount = async (accountId, provider) => {
     setAccountsLoading(true);
     try {
-      const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : provider === "revolut" ? "connect-revolut" : "connect-wise";
+      const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : provider === "revolut" ? "connect-revolut" : provider === "flutterwave" ? "connect-flutterwave" : "connect-wise";
       const res = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
@@ -1095,7 +1111,7 @@ ${businessName}`
 
   const disconnectAccount = async (accountId, provider) => {
     if (!confirm("Disconnect this account? Your transaction history will be kept.")) return;
-    const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : provider === "revolut" ? "connect-revolut" : "connect-wise";
+    const fn = provider === "stripe" ? "connect-stripe" : provider === "paypal" ? "connect-paypal" : provider === "revolut" ? "connect-revolut" : provider === "flutterwave" ? "connect-flutterwave" : "connect-wise";
     await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
       method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
@@ -1577,7 +1593,7 @@ ${businessName}`
                   </div>
 
                   {/* Connect new account cards */}
-                  {connectedAccounts.length < 4 && (
+                  {connectedAccounts.length < 5 && (
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:28}}>
 
                       {/* Wise */}
@@ -1623,6 +1639,17 @@ ${businessName}`
                           onConnect={()=>setModal("connect-revolut")}
                         />
                       )}
+
+                      {/* Flutterwave */}
+                      {!connectedAccounts.find(a=>a.provider==="flutterwave") && (
+                        <ConnectCard
+                          icon="🦋"
+                          name="Flutterwave"
+                          desc="Nigerian freelancers — connect Flutterwave to sync NGN collections and balance."
+                          color="#F5A623"
+                          onConnect={()=>setModal("connect-flutterwave")}
+                        />
+                      )}
                     </div>
                   )}
 
@@ -1633,11 +1660,11 @@ ${businessName}`
                       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
                         {connectedAccounts.map(acc => (
                           <div key={acc.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,position:"relative",overflow:"hidden"}}>
-                            <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:acc.provider==="wise"?"#4ADE80":acc.provider==="stripe"?"#635bff":acc.provider==="paypal"?"#009cde":"#7B61FF"}}/>
+                            <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:acc.provider==="wise"?"#4ADE80":acc.provider==="stripe"?"#635bff":acc.provider==="paypal"?"#009cde":acc.provider==="flutterwave"?"#F5A623":"#7B61FF"}}/>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                               <div style={{display:"flex",alignItems:"center",gap:10}}>
                                 <div style={{width:36,height:36,borderRadius:10,background:C.bg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>
-                                  {acc.provider==="wise"?"🌍":acc.provider==="stripe"?"⚡":acc.provider==="paypal"?"🅿":"🔄"}
+                                  {acc.provider==="wise"?"🌍":acc.provider==="stripe"?"⚡":acc.provider==="paypal"?"🅿":acc.provider==="flutterwave"?"🦋":"🔄"}
                                 </div>
                                 <div>
                                   <div style={{fontSize:14,fontWeight:700}}>{acc.account_name}</div>
@@ -2271,6 +2298,51 @@ ${businessName}`
           />
           <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
             Read-only access only. We never initiate transfers or payments.
+          </p>
+        </Modal>
+      )}
+      {modal==="connect-flutterwave"&&(
+        <Modal title="Connect Flutterwave" onClose={()=>{close();setFlutterwaveKey("");}} footer={
+          <div style={{display:"flex",gap:10}}>
+            <Btn variant="secondary" onClick={()=>{close();setFlutterwaveKey("");}} style={{flex:1}}>Cancel</Btn>
+            <Btn onClick={async()=>{
+              if(!flutterwaveKey.trim()){alert("Please enter your secret key");return;}
+              await connectFlutterwave(flutterwaveKey.trim());
+              close();setFlutterwaveKey("");
+            }} style={{flex:1,background:"#F5A623",color:"#000",boxShadow:"none"}} disabled={accountsLoading}>
+              {accountsLoading?"Connecting...":"Connect Flutterwave"}
+            </Btn>
+          </div>
+        }>
+          {/* How to get key */}
+          <div style={{background:"#1a1000",border:"1px solid #F5A62344",borderRadius:12,padding:16,marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#F5A623",marginBottom:8}}>How to get your Flutterwave secret key</div>
+            <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.8}}>
+              1. Log in to <strong style={{color:"#F1F5F9"}}>dashboard.flutterwave.com</strong><br/>
+              2. Go to <strong style={{color:"#F1F5F9"}}>Settings → API Keys</strong><br/>
+              3. Copy your <strong style={{color:"#F1F5F9"}}>Secret Key</strong> (starts with <code style={{color:"#F5A623",fontSize:11}}>FLWSECK_</code>)<br/>
+              4. Make sure you're using your <strong style={{color:"#F1F5F9"}}>Live</strong> key, not Test
+            </div>
+          </div>
+
+          {/* Security notice */}
+          <div style={{background:"#0d1a0d",border:"1px solid #1a3a1a",borderRadius:12,padding:14,marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
+            <span style={{fontSize:16,flexShrink:0}}>🔒</span>
+            <div style={{fontSize:12,color:"#8B95A8",lineHeight:1.7}}>
+              <strong style={{color:"#4ADE80"}}>Read-only use only.</strong><br/>
+              Ledgr uses your key to fetch your NGN balance and incoming transactions. We <strong style={{color:"#F1F5F9"}}>never</strong> initiate payouts, transfers, or any transaction on your behalf. Your key is stored encrypted.
+            </div>
+          </div>
+
+          <TextInput
+            label="Flutterwave Secret Key"
+            value={flutterwaveKey}
+            onChange={e=>setFlutterwaveKey(e.target.value)}
+            placeholder="FLWSECK_live_XXXXXXXXXXXX"
+            type="password"
+          />
+          <p style={{fontSize:12,color:"#4B5563",marginTop:-8,lineHeight:1.6}}>
+            Syncs your NGN collections and available balance from Flutterwave.
           </p>
         </Modal>
       )}
