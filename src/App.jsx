@@ -887,7 +887,7 @@ export default function App() {
     try {
       const url = await getOrCreatePayLink(inv);
       const businessName = profile?.name || "your service provider";
-      const amount = new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(inv.amount);
+      const amount = money(inv.amount, inv.currency || profile?.currency);
       const subject = encodeURIComponent(`Invoice for ${amount} from ${businessName}`);
       const body = encodeURIComponent(
 `Hi ${inv.client},
@@ -1281,13 +1281,14 @@ ${businessName}`
   );
 
   const totalAccountBalance = connectedAccounts.reduce((s,a)=>s+(a.balance||0),0);
+  const pc = profile?.currency;
   const stats=[
-    {label:"Collected",value:money(totalIncome),color:C.accent},
-    {label:"Pending",value:money(totalPending),color:C.warning},
-    {label:"Overdue",value:money(totalOverdue),color:C.danger},
-    {label:"Expenses",value:money(totalExp),color:"#60A5FA"},
-    {label:"Net Profit",value:money(netProfit),color:netProfit>=0?C.accent:C.danger},
-    ...(connectedAccounts.length>0?[{label:"Account Balance",value:money(totalAccountBalance),color:"#A78BFA"}]:[]),
+    {label:"Collected",value:money(totalIncome,pc),color:C.accent},
+    {label:"Pending",value:money(totalPending,pc),color:C.warning},
+    {label:"Overdue",value:money(totalOverdue,pc),color:C.danger},
+    {label:"Expenses",value:money(totalExp,pc),color:"#60A5FA"},
+    {label:"Net Profit",value:money(netProfit,pc),color:netProfit>=0?C.accent:C.danger},
+    ...(connectedAccounts.length>0?[{label:"Account Balance",value:money(totalAccountBalance,pc),color:"#A78BFA"}]:[]),
   ];
 
   return (
@@ -1390,7 +1391,7 @@ ${businessName}`
                     {invoices.slice(0,4).map(inv=>(
                       <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
                         <div><div style={{fontSize:14,fontWeight:600}}>{inv.client}</div><div style={{fontSize:12,color:C.muted}}>{inv.description}</div></div>
-                        <div style={{textAlign:"right"}}><div style={{fontSize:14,fontWeight:700}}>{money(inv.amount)}</div><StatusPill status={inv.status}/></div>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:14,fontWeight:700}}>{money(inv.amount, inv.currency||profile?.currency)}</div><StatusPill status={inv.status}/></div>
                       </div>
                     ))}
                   </div>
@@ -1400,7 +1401,7 @@ ${businessName}`
                       {upcoming.map(a=>(
                         <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
                           <div><div style={{fontSize:14,fontWeight:600}}>{a.label}</div><div style={{fontSize:12,color:a.days<=3?C.danger:a.days<=7?C.warning:C.muted}}>{a.days<=0?"Due today!":`Due in ${a.days} days`}</div></div>
-                          <div style={{textAlign:"right"}}><div style={{fontSize:14,fontWeight:700}}>{money(a.amount)}</div><Badge type={a.type}/></div>
+                          <div style={{textAlign:"right"}}><div style={{fontSize:14,fontWeight:700}}>{money(a.amount, profile?.currency)}</div><Badge type={a.type}/></div>
                         </div>
                       ))}
                     </div>
@@ -1437,7 +1438,7 @@ ${businessName}`
                             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Badge type={inv.type}/><StatusPill status={inv.status}/></div>
                           </div>
                           <div style={{fontSize:20,fontWeight:800,fontFamily:"'Playfair Display',serif",textAlign:"right"}}>
-                            {money(inv.amount)}
+                            {money(inv.amount, inv.currency||profile?.currency)}
                           </div>
                         </div>
                         <div style={{fontSize:12,color:C.muted,marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${C.border}`}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
@@ -1495,7 +1496,7 @@ ${businessName}`
                           </div>
                           <div style={{fontSize:12,color:C.muted}}>{exp.category} · {exp.date?fmtDate(exp.date):"-"}</div>
                         </div>
-                        <div style={{fontSize:16,fontWeight:800,color:C.danger,fontFamily:"'Playfair Display',serif",flexShrink:0}}>{money(exp.amount)}</div>
+                        <div style={{fontSize:16,fontWeight:800,color:C.danger,fontFamily:"'Playfair Display',serif",flexShrink:0}}>{money(exp.amount, profile?.currency)}</div>
                         <button onClick={()=>delExpense(exp.id)} style={{background:C.dangerDim,border:`1px solid ${C.danger}33`,color:C.danger,borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background 0.15s"}}>✕</button>
                       </div>
                     ))}
@@ -1519,7 +1520,7 @@ ${businessName}`
                           <div style={{display:"flex",alignItems:"center",gap:12}}>
                             <div style={{width:44,height:44,borderRadius:10,background:urg+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18,color:urg,fontWeight:700}}>{days<=0?"!":days<=3?"!!":"ok"}</div>
                             <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{fontSize:14,fontWeight:600}}>{a.label}</span><Badge type={a.type}/></div><div style={{fontSize:12,color:urg,fontWeight:500}}>{days<=0?"Due today!":days===1?"Due tomorrow!":`Due in ${days} days`}</div></div>
-                            <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{a.amount>0?money(a.amount):"-"}</div><button onClick={()=>delAlert(a.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Dismiss</button></div>
+                            <div style={{textAlign:"right"}}><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>{a.amount>0?money(a.amount,profile?.currency):"-"}</div><button onClick={()=>delAlert(a.id)} style={{background:C.border,border:"none",color:C.muted,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>Dismiss</button></div>
                           </div>
                         </div>
                       );
@@ -1748,7 +1749,7 @@ ${businessName}`
                             </div>
                             <div style={{marginBottom:14}}>
                               <div style={{fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Available Balance</div>
-                              <div style={{fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:800,color:C.text}}>{new Intl.NumberFormat("en-US",{style:"currency",currency:acc.currency||"USD"}).format(acc.balance||0)}</div>
+                              <div style={{fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:800,color:C.text}}>{money(acc.balance||0, acc.currency)}</div>
                               {acc.balance_updated_at && <div style={{fontSize:11,color:C.muted,marginTop:2}}>Updated {new Date(acc.balance_updated_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>}
                             </div>
                             <div style={{display:"flex",gap:8}}>
@@ -1784,7 +1785,7 @@ ${businessName}`
                             </div>
                             <div style={{fontSize:12,color:C.muted,whiteSpace:"nowrap"}}>{tx.date}</div>
                             <div style={{fontSize:13,fontWeight:700,color:tx.type==="credit"?C.accent:C.danger,whiteSpace:"nowrap"}}>
-                              {tx.type==="credit"?"+":"-"}{new Intl.NumberFormat("en-US",{style:"currency",currency:tx.currency||"USD"}).format(tx.amount)}
+                              {tx.type==="credit"?"+":"-"}{money(tx.amount, tx.currency)}
                             </div>
                             <div>
                               {tx.type==="debit" && !tx.imported_as_expense && (
@@ -1858,7 +1859,7 @@ ${businessName}`
                       <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:600}}>Income vs Expenses</h3>
                       <div style={{overflowX:"auto"}}>
                         <svg width={tW} height={H+50}>
-                          {[0,0.5,1].map((p,i)=>{const y=H-p*H;return(<g key={i}><line x1={44} y1={y} x2={tW} y2={y} stroke={C.border} strokeWidth={1}/><text x={40} y={y+4} fontSize={9} fill={C.muted} textAnchor="end">{money(p*maxV)}</text></g>);})}
+                          {[0,0.5,1].map((p,i)=>{const y=H-p*H;return(<g key={i}><line x1={44} y1={y} x2={tW} y2={y} stroke={C.border} strokeWidth={1}/><text x={40} y={y+4} fontSize={9} fill={C.muted} textAnchor="end">{money(p*maxV,profile?.currency)}</text></g>);})}
                           {months.map((m,i)=>{const x=i*(gW+spacing)+50;const iH=(mInc[i]/maxV)*H;const eH=(mExp[i]/maxV)*H;return(<g key={m.key}><rect x={x} y={H-iH} width={bW} height={iH} fill={C.accent} rx={3}/><rect x={x+bW+4} y={H-eH} width={bW} height={eH} fill={C.danger} rx={3} opacity={0.85}/><text x={x+bW} y={H+18} textAnchor="middle" fontSize={10} fill={C.muted}>{m.label}</text></g>);})}
                           <polyline points={months.map((_,i)=>`${i*(gW+spacing)+50+bW},${H-(Math.max(0,mNet[i])/maxV)*H}`).join(" ")} fill="none" stroke={C.warning} strokeWidth={2} strokeDasharray="4 2"/>
                         </svg>
@@ -1874,10 +1875,10 @@ ${businessName}`
                           <svg width={120} height={120} style={{flexShrink:0}}>
                             {slices.map((sl,i)=><path key={i} d={arc(60,60,52,sl.s,sl.e)} fill={sl.color} stroke={C.card} strokeWidth={2}/>)}
                             <circle cx={60} cy={60} r={28} fill={C.card}/>
-                            <text x={60} y={65} textAnchor="middle" fontSize={10} fill={C.text} fontWeight="bold">{money(totCat)}</text>
+                            <text x={60} y={65} textAnchor="middle" fontSize={10} fill={C.text} fontWeight="bold">{money(totCat,profile?.currency)}</text>
                           </svg>
                           <div style={{flex:1,minWidth:140}}>
-                            {slices.map((sl,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><div style={{width:10,height:10,borderRadius:2,background:sl.color,flexShrink:0}}/><div><div style={{fontSize:13,fontWeight:500}}>{sl.cat}</div><div style={{fontSize:11,color:C.muted}}>{Math.round(sl.pct*100)}% · {money(sl.amt)}</div></div></div>))}
+                            {slices.map((sl,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><div style={{width:10,height:10,borderRadius:2,background:sl.color,flexShrink:0}}/><div><div style={{fontSize:13,fontWeight:500}}>{sl.cat}</div><div style={{fontSize:11,color:C.muted}}>{Math.round(sl.pct*100)}% · {money(sl.amt,profile?.currency)}</div></div></div>))}
                           </div>
                         </div>
                       </div>
