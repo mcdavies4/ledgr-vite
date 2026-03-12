@@ -1428,6 +1428,11 @@ ${businessName}`
                             <div style={{fontSize:15,fontWeight:700,marginBottom:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                               {inv.client}
                               {inv.recurring&&<span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:5,background:C.blueDim,color:C.blue,letterSpacing:"0.08em",border:`1px solid ${C.blue}33`}}>RECURRING</span>}
+                              {inv.client_viewed_at&&inv.status!=="paid"&&(
+                                <span title={`Viewed by client ${new Date(inv.client_viewed_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}`} style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:5,background:"#0f1f30",color:C.blue,letterSpacing:"0.08em",border:`1px solid ${C.blue}33`,cursor:"default"}}>
+                                  👁 VIEWED
+                                </span>
+                              )}
                             </div>
                             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Badge type={inv.type}/><StatusPill status={inv.status}/></div>
                           </div>
