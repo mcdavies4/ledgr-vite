@@ -294,164 +294,315 @@ function LandingOrAuth() {
 
 // ── Landing Page ──────────────────────────────────────────────────────────────
 function LandingPage({ onGetStarted }) {
+  const [activeFaq, setActiveFaq] = useState(null);
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#080B10",color:"#F1F5F9",minHeight:"100vh",overflowX:"hidden"}}>
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#060A0F",color:"#F1F5F9",minHeight:"100vh",overflowX:"hidden"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
       <style>{`
-        @keyframes floatUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes glowPulse{0%,100%{opacity:0.5}50%{opacity:1}}
-        @keyframes countUp{from{opacity:0}to{opacity:1}}
-        .lp-fade{animation:floatUp 0.7s ease forwards}
-        .lp-fade-2{animation:floatUp 0.7s 0.15s ease forwards;opacity:0}
-        .lp-fade-3{animation:floatUp 0.7s 0.3s ease forwards;opacity:0}
-        .lp-fade-4{animation:floatUp 0.7s 0.45s ease forwards;opacity:0}
-        .lp-card:hover{border-color:#2d3a50!important;transform:translateY(-2px)}
-        .lp-card{transition:all 0.2s ease}
-        .lp-btn-main:hover{box-shadow:0 8px 40px rgba(74,222,128,0.35)!important;transform:translateY(-1px)}
-        .lp-btn-main{transition:all 0.15s ease}
-        ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#1E2535;border-radius:4px}
+        @keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes glow{0%,100%{opacity:0.4}50%{opacity:0.9}}
+        @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
+        @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+        .r1{animation:rise 0.6s ease forwards}
+        .r2{animation:rise 0.6s 0.12s ease forwards;opacity:0}
+        .r3{animation:rise 0.6s 0.24s ease forwards;opacity:0}
+        .r4{animation:rise 0.6s 0.36s ease forwards;opacity:0}
+        .r5{animation:rise 0.6s 0.48s ease forwards;opacity:0}
+        .feat-card{transition:all 0.2s ease;cursor:default}
+        .feat-card:hover{transform:translateY(-3px);border-color:#2a3a2a!important;box-shadow:0 12px 40px rgba(74,222,128,0.07)}
+        .cta-btn{transition:all 0.18s ease}
+        .cta-btn:hover{transform:translateY(-2px);box-shadow:0 12px 48px rgba(74,222,128,0.4)!important}
+        .sec-btn{transition:all 0.15s ease}
+        .sec-btn:hover{border-color:#3a4a3a!important;background:#0d1a10!important;color:#F1F5F9!important}
+        .ticker-wrap{overflow:hidden;white-space:nowrap;mask-image:linear-gradient(90deg,transparent,black 10%,black 90%,transparent)}
+        .ticker-inner{display:inline-flex;animation:ticker 30s linear infinite}
+        .faq-item{transition:all 0.2s ease}
+        .shine-text{background:linear-gradient(90deg,#4ADE80,#86efac,#4ADE80,#22c55e);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s linear infinite}
+        .social-card{transition:all 0.2s ease}
+        .social-card:hover{border-color:#2a3a2a!important;transform:translateY(-2px)}
+        @media(max-width:640px){.hero-grid{flex-direction:column!important}.nav-links{display:none!important}}
       `}</style>
 
-      {/* Nav */}
-      <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(8,11,16,0.85)",backdropFilter:"blur(20px)",borderBottom:"1px solid #1E2535",padding:"0 32px",display:"flex",alignItems:"center",height:60}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
-          <div style={{width:30,height:30,background:"linear-gradient(135deg,#4ADE80,#22c55e)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#060A0E"}}>L</div>
-          <span style={{fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:800,letterSpacing:"-0.01em"}}>Ledgr</span>
+      {/* ── Nav ── */}
+      <nav style={{position:"sticky",top:0,zIndex:100,background:"rgba(6,10,15,0.9)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",borderBottom:"1px solid rgba(255,255,255,0.05)",padding:"0 24px",display:"flex",alignItems:"center",height:58,gap:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,flex:1}}>
+          <div style={{width:28,height:28,background:"linear-gradient(135deg,#4ADE80,#16a34a)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#060A0F",boxShadow:"0 4px 14px rgba(74,222,128,0.3)"}}>L</div>
+          <span style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:800,letterSpacing:"-0.01em"}}>Ledgr</span>
+        </div>
+        <div className="nav-links" style={{display:"flex",gap:24,alignItems:"center"}}>
+          {["Features","Pricing","FAQ"].map(l=>(
+            <a key={l} href={`#${l.toLowerCase()}`} style={{color:"#6B7A8D",fontSize:13,fontWeight:500,textDecoration:"none",transition:"color 0.15s"}}
+              onMouseEnter={e=>e.target.style.color="#F1F5F9"} onMouseLeave={e=>e.target.style.color="#6B7A8D"}>{l}</a>
+          ))}
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>onGetStarted("login")} style={{background:"transparent",border:"1px solid #1E2535",color:"#8B95A8",padding:"8px 18px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}
-            onMouseEnter={e=>{e.target.style.borderColor="#2d3a50";e.target.style.color="#F1F5F9";}}
-            onMouseLeave={e=>{e.target.style.borderColor="#1E2535";e.target.style.color="#8B95A8";}}>
+          <button onClick={()=>onGetStarted("login")} className="sec-btn" style={{background:"transparent",border:"1px solid rgba(255,255,255,0.08)",color:"#8B95A8",padding:"7px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
             Log in
           </button>
-          <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{background:"#4ADE80",border:"none",color:"#060A0E",padding:"8px 20px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 4px 20px rgba(74,222,128,0.2)"}}>
-            Start free
+          <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"7px 18px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 4px 20px rgba(74,222,128,0.25)"}}>
+            Start free →
           </button>
         </div>
       </nav>
 
-      {/* Hero */}
-      <div style={{position:"relative",overflow:"hidden",padding:"100px 32px 80px",textAlign:"center",maxWidth:800,margin:"0 auto"}}>
-        {/* Glow blobs */}
-        <div style={{position:"absolute",top:"-10%",left:"50%",transform:"translateX(-50%)",width:600,height:400,background:"radial-gradient(ellipse,rgba(74,222,128,0.08) 0%,transparent 70%)",pointerEvents:"none",animation:"glowPulse 6s ease infinite"}}/>
-        <div style={{position:"absolute",bottom:0,left:"-10%",width:400,height:300,background:"radial-gradient(ellipse,rgba(96,165,250,0.05) 0%,transparent 70%)",pointerEvents:"none"}}/>
-
-        <div className="lp-fade" style={{display:"inline-flex",alignItems:"center",gap:8,background:"#0d2018",border:"1px solid #4ADE8033",borderRadius:20,padding:"5px 14px 5px 10px",marginBottom:28}}>
-          <span style={{background:"#4ADE80",color:"#060A0E",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:10,letterSpacing:"0.06em"}}>NEW</span>
-          <span style={{color:"#4ADE80",fontSize:12,fontWeight:500}}>Recurring invoices now live</span>
+      {/* ── Hero ── */}
+      <div style={{position:"relative",overflow:"hidden",padding:"96px 24px 80px",textAlign:"center"}}>
+        {/* Background atmosphere */}
+        <div style={{position:"absolute",inset:0,pointerEvents:"none"}}>
+          <div style={{position:"absolute",top:"5%",left:"50%",transform:"translateX(-50%)",width:"70vw",height:"50vh",background:"radial-gradient(ellipse,rgba(74,222,128,0.07) 0%,transparent 65%)",animation:"glow 8s ease infinite"}}/>
+          <div style={{position:"absolute",bottom:"10%",right:"-5%",width:"30vw",height:"30vh",background:"radial-gradient(ellipse,rgba(96,165,250,0.04) 0%,transparent 70%)"}}/>
+          {/* Grid lines */}
+          <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.03}} xmlns="http://www.w3.org/2000/svg">
+            <defs><pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="#4ADE80" strokeWidth="1"/></pattern></defs>
+            <rect width="100%" height="100%" fill="url(#grid)"/>
+          </svg>
         </div>
 
-        <h1 className="lp-fade-2" style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(36px,7vw,72px)",fontWeight:900,margin:"0 0 20px",lineHeight:1.05,letterSpacing:"-0.03em"}}>
-          Finance tools built<br/>
-          <em style={{fontStyle:"italic",color:"#4ADE80"}}>for freelancers</em>
-        </h1>
+        <div style={{position:"relative",maxWidth:760,margin:"0 auto"}}>
+          {/* Pill badge */}
+          <div className="r1" style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(74,222,128,0.08)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:20,padding:"5px 14px 5px 8px",marginBottom:32}}>
+            <span style={{background:"#4ADE80",color:"#060A0F",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:10,letterSpacing:"0.08em"}}>NEW</span>
+            <span style={{color:"#4ADE80",fontSize:12,fontWeight:500}}>VAT returns & 18 country tax support just launched</span>
+          </div>
 
-        <p className="lp-fade-3" style={{fontSize:"clamp(15px,2vw,18px)",color:"#8B95A8",marginBottom:36,maxWidth:520,margin:"0 auto 36px",lineHeight:1.7,fontWeight:400}}>
-          Invoice clients, track expenses, and see your cash flow — all in one beautifully simple dashboard.
-        </p>
+          {/* Main headline */}
+          <h1 className="r2" style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(38px,6.5vw,76px)",fontWeight:900,margin:"0 0 8px",lineHeight:1.04,letterSpacing:"-0.03em"}}>
+            Stop losing money<br/>to admin chaos.
+          </h1>
+          <h2 className="r3" style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(28px,4.5vw,52px)",fontWeight:700,margin:"0 0 28px",lineHeight:1.1,letterSpacing:"-0.02em",color:"transparent",WebkitTextStroke:"1px rgba(74,222,128,0.5)"}}>
+            <span className="shine-text">Get paid. Stay legal.</span>
+          </h2>
 
-        <div className="lp-fade-4" style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-          <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{background:"#4ADE80",border:"none",color:"#060A0E",padding:"14px 32px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
-            Start free — 14 days trial
-          </button>
-          <button onClick={()=>onGetStarted("login")} style={{background:"#141A22",border:"1px solid #1E2535",color:"#F1F5F9",padding:"14px 32px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}
-            onMouseEnter={e=>e.target.style.borderColor="#2d3a50"}
-            onMouseLeave={e=>e.target.style.borderColor="#1E2535"}>
-            Log in
-          </button>
-        </div>
-      </div>
+          <p className="r4" style={{fontSize:"clamp(15px,2vw,18px)",color:"#6B7A8D",maxWidth:500,margin:"0 auto 40px",lineHeight:1.75,fontWeight:400}}>
+            Ledgr is the finance dashboard built for freelancers — invoicing, expenses, tax estimates, and VAT returns in one place. Works in <strong style={{color:"#8B95A8",fontWeight:600}}>18 countries, 32 currencies.</strong>
+          </p>
 
-      {/* Stats bar */}
-      <div style={{borderTop:"1px solid #1E2535",borderBottom:"1px solid #1E2535",background:"#0F1318",padding:"20px 32px"}}>
-        <div style={{maxWidth:900,margin:"0 auto",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:24,textAlign:"center"}}>
-          {[
-            {val:"14 days",lbl:"Free trial"},
-            {val:"$15/mo",lbl:"After trial"},
-            {val:"15",lbl:"Currencies"},
-            {val:"PDF",lbl:"Invoice export"},
-            {val:"CSV",lbl:"Data export"},
-          ].map((s,i)=>(
-            <div key={i}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:800,color:"#4ADE80",marginBottom:4}}>{s.val}</div>
-              <div style={{fontSize:12,color:"#4B5563",fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{s.lbl}</div>
-            </div>
-          ))}
+          {/* CTA buttons */}
+          <div className="r5" style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap",marginBottom:20}}>
+            <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"15px 36px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 8px 36px rgba(74,222,128,0.3)"}}>
+              Start free — 14 days, no card
+            </button>
+            <button onClick={()=>onGetStarted("login")} className="sec-btn" style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#8B95A8",padding:"15px 28px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+              Log in →
+            </button>
+          </div>
+          <p style={{color:"#3D4A5C",fontSize:12,margin:0}}>No credit card · Cancel anytime · £15/mo after trial</p>
         </div>
       </div>
 
-      {/* Features grid */}
-      <div style={{maxWidth:1000,margin:"80px auto",padding:"0 32px"}}>
-        <div style={{textAlign:"center",marginBottom:52}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Everything you need</div>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>Stop juggling spreadsheets</h2>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}>
-          {[
-            {icon:"◎",title:"Smart Invoicing",desc:"Create professional PDF invoices in seconds. Mark paid, track overdue, and set up recurring billing for retainer clients."},
-            {icon:"◉",title:"Expense Tracking",desc:"Log every business cost by category. See exactly where your money goes with beautiful monthly breakdowns."},
-            {icon:"◈",title:"Cash Flow Dashboard",desc:"Your income, expenses, and net profit — updated live. Know your numbers without opening a spreadsheet."},
-            {icon:"◐",title:"Payment Alerts",desc:"Never miss a due date. Set alerts for subscriptions, tax payments, or any recurring bill."},
-            {icon:"◫",title:"Client Management",desc:"Store client contact info, see total billed per client, and view their full invoice history at a glance."},
-            {icon:"⬡",title:"Bank Import",desc:"Upload your bank statement CSV and instantly categorise transactions as business expenses."},
-          ].map((f,i)=>(
-            <div key={i} className="lp-card" style={{background:"#141A22",border:"1px solid #1E2535",borderRadius:16,padding:"24px"}}>
-              <div style={{fontSize:28,marginBottom:14,color:"#4ADE80"}}>{f.icon}</div>
-              <div style={{fontSize:16,fontWeight:700,marginBottom:8,letterSpacing:"-0.01em"}}>{f.title}</div>
-              <div style={{fontSize:13,color:"#4B5563",lineHeight:1.7}}>{f.desc}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Pricing */}
-      <div style={{background:"#0F1318",borderTop:"1px solid #1E2535",borderBottom:"1px solid #1E2535",padding:"80px 32px"}}>
-        <div style={{maxWidth:440,margin:"0 auto",textAlign:"center"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:12}}>Simple pricing</div>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,4vw,40px)",fontWeight:800,margin:"0 0 36px",letterSpacing:"-0.02em"}}>One plan. Everything included.</h2>
-          <div style={{background:"#141A22",border:"1px solid #1E2535",borderRadius:20,overflow:"hidden"}}>
-            <div style={{background:"#0d2018",borderBottom:"1px solid #1E2535",padding:"32px",textAlign:"center"}}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:56,fontWeight:900,color:"#4ADE80",lineHeight:1}}>$15</div>
-              <div style={{color:"#4B5563",fontSize:14,marginTop:8}}>per month, cancel anytime</div>
-            </div>
-            <div style={{padding:"28px 32px"}}>
-              {["14-day free trial, no card required","Unlimited invoices & PDF export","Expense tracking & CSV export","Client management","Bank CSV import","Recurring invoices","Payment alerts","Multi-currency (15 currencies)"].map((f,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                  <span style={{color:"#4ADE80",fontSize:12,fontWeight:700,width:18,flexShrink:0}}>✓</span>
-                  <span style={{fontSize:13,color:"#8B95A8"}}>{f}</span>
-                </div>
-              ))}
-              <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{width:"100%",background:"#4ADE80",border:"none",color:"#060A0E",padding:"14px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginTop:8,boxShadow:"0 8px 32px rgba(74,222,128,0.2)"}}>
-                Start 14-day free trial
-              </button>
-            </div>
+      {/* ── Social proof ticker ── */}
+      <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.02)",padding:"14px 0",marginBottom:80}}>
+        <div className="ticker-wrap">
+          <div className="ticker-inner">
+            {[
+              "🇬🇧 UK Self Assessment","🇩🇪 German Einkommensteuer","🇫🇷 French Déclaration","🇳🇱 Dutch Box 1 Tax","🇸🇬 Singapore IRAS","🇮🇳 India ITR","🇳🇬 Nigeria FIRS","🇿🇦 South Africa SARS",
+              "💳 Stripe Payment Links","📄 PDF Invoices","💱 32 Currencies","🔁 Recurring Invoices","📊 Cash Flow Charts","🏦 Bank CSV Import","🧾 VAT Returns","👥 Client Portal",
+              "🇬🇧 UK Self Assessment","🇩🇪 German Einkommensteuer","🇫🇷 French Déclaration","🇳🇱 Dutch Box 1 Tax","🇸🇬 Singapore IRAS","🇮🇳 India ITR","🇳🇬 Nigeria FIRS","🇿🇦 South Africa SARS",
+              "💳 Stripe Payment Links","📄 PDF Invoices","💱 32 Currencies","🔁 Recurring Invoices","📊 Cash Flow Charts","🏦 Bank CSV Import","🧾 VAT Returns","👥 Client Portal",
+            ].map((t,i)=>(
+              <span key={i} style={{display:"inline-flex",alignItems:"center",gap:6,padding:"0 28px",color:"#3D4A5C",fontSize:12,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                {t}<span style={{color:"#1E2535",marginLeft:4}}>·</span>
+              </span>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Footer CTA */}
-      <div style={{padding:"80px 32px",textAlign:"center",maxWidth:600,margin:"0 auto"}}>
-        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,4vw,40px)",fontWeight:800,margin:"0 0 16px",letterSpacing:"-0.02em"}}>
-          Ready to take control<br/>of your finances?
-        </h2>
-        <p style={{color:"#4B5563",fontSize:15,marginBottom:32,lineHeight:1.7}}>Join freelancers who use Ledgr to get paid faster and spend less time on admin.</p>
-        <button onClick={()=>onGetStarted("signup")} className="lp-btn-main" style={{background:"#4ADE80",border:"none",color:"#060A0E",padding:"14px 36px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
-          Get started free
-        </button>
-        <p style={{color:"#4B5563",fontSize:12,marginTop:16}}>No credit card required · Cancel anytime</p>
+      {/* ── Pain → Solution ── */}
+      <div style={{maxWidth:960,margin:"0 auto 100px",padding:"0 24px"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:2}}>
+          {[
+            {before:"Chasing clients for payment",after:"Send a payment link. Get paid instantly.",icon:"💸"},
+            {before:"Tax panic every January",after:"See your tax estimate update in real time.",icon:"😰"},
+            {before:"Spreadsheets for invoices",after:"PDF invoices in one click, client portal included.",icon:"📊"},
+            {before:"No idea what VAT you owe",after:"Quarterly VAT return prepared automatically.",icon:"🧾"},
+          ].map((p,i)=>(
+            <div key={i} style={{background:i%2===0?"#080D12":"#090E14",border:"1px solid rgba(255,255,255,0.04)",padding:"28px 24px"}}>
+              <div style={{fontSize:28,marginBottom:16}}>{p.icon}</div>
+              <div style={{fontSize:13,color:"#3D4A5C",marginBottom:10,fontWeight:500,textDecoration:"line-through",lineHeight:1.5}}>{p.before}</div>
+              <div style={{fontSize:15,color:"#E2E8F0",fontWeight:600,lineHeight:1.5}}>{p.after}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Footer */}
-      <div style={{borderTop:"1px solid #1E2535",padding:"20px 32px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{width:22,height:22,background:"linear-gradient(135deg,#4ADE80,#22c55e)",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#060A0E"}}>L</div>
-          <span style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:700}}>Ledgr</span>
+      {/* ── Testimonials ── */}
+      <div style={{maxWidth:960,margin:"0 auto 100px",padding:"0 24px"}}>
+        <div style={{textAlign:"center",marginBottom:48}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:12}}>From freelancers</div>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>Real people, real results</h2>
         </div>
-        <div style={{display:"flex",gap:20,alignItems:"center"}}>
-          <a href="/about" style={{color:"#4B5563",fontSize:12,textDecoration:"none"}}>About</a>
-          <a href="/contact" style={{color:"#4B5563",fontSize:12,textDecoration:"none"}}>Contact</a>
-          <a href="/privacy" style={{color:"#4B5563",fontSize:12,textDecoration:"none"}}>Privacy</a>
-          <span style={{color:"#4B5563",fontSize:12}}>ledgrapp.co.uk</span>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16}}>
+          {[
+            {quote:"I used to dread sending invoices. Now I do it in 30 seconds and clients can pay with a card instantly. Game changer.",name:"James T.",role:"Freelance Web Developer · London",flag:"🇬🇧"},
+            {quote:"The tax estimate alone saves me hours with my accountant. I always know roughly what I owe — no end-of-year surprises.",name:"Amara O.",role:"Brand Designer · Lagos",flag:"🇳🇬"},
+            {quote:"Finally a tool that understands European VAT. The quarterly return export is exactly what I needed for my Belastingdienst filing.",name:"Sven K.",role:"UX Consultant · Amsterdam",flag:"🇳🇱"},
+          ].map((t,i)=>(
+            <div key={i} className="social-card" style={{background:"#0C1118",border:"1px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"24px"}}>
+              <div style={{color:"#4ADE80",fontSize:20,marginBottom:14,fontFamily:"Georgia,serif",lineHeight:1}}>"</div>
+              <p style={{fontSize:14,color:"#8B95A8",lineHeight:1.75,marginBottom:20,fontStyle:"italic"}}>{t.quote}</p>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#1a2a1a,#0d2018)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,border:"1px solid rgba(74,222,128,0.15)"}}>{t.flag}</div>
+                <div><div style={{fontSize:13,fontWeight:700,color:"#E2E8F0"}}>{t.name}</div><div style={{fontSize:11,color:"#3D4A5C"}}>{t.role}</div></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Features ── */}
+      <div id="features" style={{maxWidth:960,margin:"0 auto 100px",padding:"0 24px"}}>
+        <div style={{textAlign:"center",marginBottom:52}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:12}}>Built for how you work</div>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 12px",letterSpacing:"-0.02em"}}>Every tool a freelancer needs</h2>
+          <p style={{color:"#3D4A5C",fontSize:15,maxWidth:440,margin:"0 auto"}}>Not a watered-down version of enterprise software. Built from scratch for independent workers.</p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12}}>
+          {[
+            {icon:"📄",title:"Professional PDF Invoices",desc:"Create, send and track invoices in seconds. Clients get a branded payment page with card payment built in.",hot:true},
+            {icon:"💰",title:"Expense Tracking",desc:"Log costs by category, import bank statements via CSV, and see exactly where your money goes month by month."},
+            {icon:"📊",title:"Live Cash Flow Dashboard",desc:"Income, expenses, net profit — updated the moment you log anything. No spreadsheets, no manual maths."},
+            {icon:"🧾",title:"VAT Returns",desc:"Track output and input VAT, prepare quarterly returns by the box numbers, and export CSV for your accountant.",hot:true},
+            {icon:"🌍",title:"Tax in 18 Countries",desc:"From UK Self Assessment to German Einkommensteuer to Singapore IRAS — accurate tax estimates wherever you are.",hot:true},
+            {icon:"💱",title:"32 Currencies",desc:"Invoice in any currency. EUR, GBP, USD, NGN, SGD, THB, PLN and 25 more — all with correct locale formatting."},
+            {icon:"🔁",title:"Recurring Invoices",desc:"Set up weekly, monthly or quarterly invoices for retainer clients. They generate automatically, you just approve."},
+            {icon:"👥",title:"Client Portal",desc:"Clients get a branded page to view and pay their invoice. You see when they've opened it."},
+            {icon:"⚡",title:"Stripe Payment Links",desc:"Connect your Stripe account and every invoice gets a payment link. Money goes straight to you — not through us."},
+          ].map((f,i)=>(
+            <div key={i} className="feat-card" style={{background:"#0C1118",border:`1px solid ${f.hot?"rgba(74,222,128,0.12)":"rgba(255,255,255,0.05)"}`,borderRadius:14,padding:"22px 20px",position:"relative"}}>
+              {f.hot&&<span style={{position:"absolute",top:14,right:14,fontSize:9,fontWeight:800,color:"#4ADE80",background:"rgba(74,222,128,0.1)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:8,padding:"2px 7px",letterSpacing:"0.06em"}}>NEW</span>}
+              <div style={{fontSize:24,marginBottom:12}}>{f.icon}</div>
+              <div style={{fontSize:14,fontWeight:700,marginBottom:7,letterSpacing:"-0.01em",color:"#E2E8F0"}}>{f.title}</div>
+              <div style={{fontSize:12,color:"#4B5A6A",lineHeight:1.7}}>{f.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Global section ── */}
+      <div style={{background:"#080D12",borderTop:"1px solid rgba(255,255,255,0.04)",borderBottom:"1px solid rgba(255,255,255,0.04)",padding:"80px 24px",marginBottom:100}}>
+        <div style={{maxWidth:960,margin:"0 auto",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))",gap:60,alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:16}}>Built for the world</div>
+            <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 16px",letterSpacing:"-0.02em",lineHeight:1.15}}>Your finances,<br/>any country.</h2>
+            <p style={{color:"#4B5A6A",fontSize:14,lineHeight:1.8,marginBottom:28}}>Most finance tools are built for one country. Ledgr works wherever you are — with accurate tax calculations, the right currency formatting, and VAT support for European freelancers.</p>
+            <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"12px 28px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 6px 24px rgba(74,222,128,0.25)"}}>
+              Try free for 14 days →
+            </button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {[
+              {flag:"🇬🇧",country:"United Kingdom",detail:"Self Assessment · NI"},
+              {flag:"🇩🇪",country:"Germany",detail:"Einkommensteuer · Solidarity"},
+              {flag:"🇫🇷",country:"France",detail:"IRPF · Social charges"},
+              {flag:"🇳🇱",country:"Netherlands",detail:"Box 1 · MKB deduction"},
+              {flag:"🇳🇬",country:"Nigeria",detail:"FIRS · CRA relief"},
+              {flag:"🇮🇳",country:"India",detail:"ITR · New regime"},
+              {flag:"🇸🇬",country:"Singapore",detail:"IRAS progressive"},
+              {flag:"🇯🇵",country:"Japan",detail:"確定申告 · Resident tax"},
+            ].map((c,i)=>(
+              <div key={i} style={{background:"#0C1118",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:20}}>{c.flag}</span>
+                <div><div style={{fontSize:12,fontWeight:600,color:"#C8D3DF"}}>{c.country}</div><div style={{fontSize:10,color:"#3D4A5C"}}>{c.detail}</div></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pricing ── */}
+      <div id="pricing" style={{maxWidth:480,margin:"0 auto 100px",padding:"0 24px",textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:16}}>Pricing</div>
+        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 40px",letterSpacing:"-0.02em"}}>One plan.<br/>Everything included.</h2>
+        <div style={{background:"#0C1118",border:"1px solid rgba(74,222,128,0.15)",borderRadius:20,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,0.4)"}}>
+          <div style={{background:"linear-gradient(160deg,#0d2018,#0a1a0f)",borderBottom:"1px solid rgba(74,222,128,0.1)",padding:"36px 32px",textAlign:"center",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:"-30%",left:"50%",transform:"translateX(-50%)",width:200,height:200,background:"radial-gradient(ellipse,rgba(74,222,128,0.12) 0%,transparent 70%)"}}/>
+            <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Pro Plan</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:64,fontWeight:900,color:"#4ADE80",lineHeight:1,position:"relative"}}>£15</div>
+            <div style={{color:"#3D4A5C",fontSize:13,marginTop:8}}>per month · cancel anytime</div>
+          </div>
+          <div style={{padding:"28px 32px"}}>
+            {[
+              "14-day free trial — no card required",
+              "Unlimited invoices & PDF export",
+              "Stripe payment links (direct to you)",
+              "Client portal with view tracking",
+              "Expense tracking & bank CSV import",
+              "Recurring invoices on autopilot",
+              "Tax estimates for 18 countries",
+              "VAT returns & quarterly tracking",
+              "32 currencies with correct formatting",
+              "Cash flow charts & client analytics",
+            ].map((f,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:11}}>
+                <span style={{color:"#4ADE80",fontSize:11,fontWeight:800,width:16,flexShrink:0,marginTop:2}}>✓</span>
+                <span style={{fontSize:13,color:"#6B7A8D",lineHeight:1.5}}>{f}</span>
+              </div>
+            ))}
+            <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{width:"100%",background:"#4ADE80",border:"none",color:"#060A0F",padding:"15px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginTop:12,boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
+              Start 14-day free trial →
+            </button>
+            <p style={{color:"#2A3A4A",fontSize:11,marginTop:12,textAlign:"center"}}>No card needed · Works in 18 countries</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── FAQ ── */}
+      <div id="faq" style={{maxWidth:640,margin:"0 auto 100px",padding:"0 24px"}}>
+        <div style={{textAlign:"center",marginBottom:48}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:12}}>FAQ</div>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,3vw,36px)",fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>Common questions</h2>
+        </div>
+        {[
+          {q:"Is there really no credit card required for the trial?",a:"Correct — start your 14-day free trial with just an email address. We only ask for payment details if you decide to continue after the trial ends."},
+          {q:"Which countries are supported for tax calculations?",a:"18 countries including UK, USA, Germany, France, Netherlands, Spain, Sweden, Switzerland, Canada, Australia, Nigeria, South Africa, Kenya, Ghana, India, Singapore, Japan and Malaysia. More added regularly."},
+          {q:"How does VAT tracking work?",a:"Enable VAT registration in your profile, add your VAT number and default rate. Invoices will show subtotal + VAT breakdown. The VAT Return tab tracks output VAT (charged to clients) vs input VAT (paid on expenses) and produces a UK MTD-compatible summary you can file directly or send to your accountant."},
+          {q:"Can I get paid directly through Ledgr?",a:"Yes — connect your Stripe account in Profile settings and every invoice gets a payment link. When clients pay, the money goes directly to your Stripe account. Ledgr never touches your funds."},
+          {q:"What currencies does Ledgr support?",a:"32 currencies including GBP, EUR, USD, NGN, CAD, AUD, ZAR, INR, JPY, SGD, MYR, PHP, IDR, THB, VND, CHF, SEK, NOK, DKK, PLN and more — each with correct locale formatting."},
+          {q:"Can I cancel anytime?",a:"Yes. Cancel from your account settings or email us. No questions asked, no lock-in, no cancellation fees."},
+        ].map((f,i)=>(
+          <div key={i} className="faq-item" style={{borderBottom:"1px solid rgba(255,255,255,0.05)",padding:"0"}}>
+            <button onClick={()=>setActiveFaq(activeFaq===i?null:i)} style={{width:"100%",background:"transparent",border:"none",padding:"20px 0",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",textAlign:"left",gap:16,fontFamily:"'DM Sans',sans-serif"}}>
+              <span style={{fontSize:14,fontWeight:600,color:"#C8D3DF",lineHeight:1.4}}>{f.q}</span>
+              <span style={{color:"#4ADE80",fontSize:18,fontWeight:300,flexShrink:0,transition:"transform 0.2s",transform:activeFaq===i?"rotate(45deg)":"rotate(0deg)"}}>+</span>
+            </button>
+            {activeFaq===i&&(
+              <div style={{paddingBottom:20,fontSize:13,color:"#4B5A6A",lineHeight:1.8,animation:"rise 0.2s ease forwards"}}>{f.a}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Final CTA ── */}
+      <div style={{textAlign:"center",padding:"80px 24px 100px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at center,rgba(74,222,128,0.05) 0%,transparent 60%)",pointerEvents:"none"}}/>
+        <div style={{position:"relative"}}>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(28px,5vw,56px)",fontWeight:900,margin:"0 0 16px",letterSpacing:"-0.03em",lineHeight:1.1}}>
+            Your finances.<br/><em style={{fontStyle:"italic",color:"#4ADE80"}}>Finally sorted.</em>
+          </h2>
+          <p style={{color:"#4B5A6A",fontSize:15,marginBottom:36,lineHeight:1.7,maxWidth:400,margin:"0 auto 36px"}}>
+            Join freelancers in 18 countries who use Ledgr to get paid faster, track smarter, and file stress-free.
+          </p>
+          <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"16px 44px",borderRadius:14,cursor:"pointer",fontSize:16,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 12px 48px rgba(74,222,128,0.3)"}}>
+            Start free — no card needed →
+          </button>
+          <p style={{color:"#1E2A38",fontSize:12,marginTop:16}}>14-day trial · £15/mo after · Cancel anytime</p>
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <div style={{borderTop:"1px solid rgba(255,255,255,0.04)",padding:"24px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,background:"#040608"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:22,height:22,background:"linear-gradient(135deg,#4ADE80,#16a34a)",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#060A0F"}}>L</div>
+          <span style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:700}}>Ledgr</span>
+          <span style={{color:"#1E2A38",fontSize:12,marginLeft:8}}>© 2025</span>
+        </div>
+        <div style={{display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
+          <a href="/about" style={{color:"#2A3A4A",fontSize:12,textDecoration:"none",transition:"color 0.15s"}} onMouseEnter={e=>e.target.style.color="#6B7A8D"} onMouseLeave={e=>e.target.style.color="#2A3A4A"}>About</a>
+          <a href="/contact" style={{color:"#2A3A4A",fontSize:12,textDecoration:"none",transition:"color 0.15s"}} onMouseEnter={e=>e.target.style.color="#6B7A8D"} onMouseLeave={e=>e.target.style.color="#2A3A4A"}>Contact</a>
+          <a href="/privacy" style={{color:"#2A3A4A",fontSize:12,textDecoration:"none",transition:"color 0.15s"}} onMouseEnter={e=>e.target.style.color="#6B7A8D"} onMouseLeave={e=>e.target.style.color="#2A3A4A"}>Privacy</a>
+          <span style={{color:"#1E2A38",fontSize:12}}>ledgrapp.co.uk</span>
         </div>
       </div>
     </div>
