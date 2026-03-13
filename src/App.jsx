@@ -672,9 +672,16 @@ function AuthScreen({ initialMode="login" }) {
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
 function generatePDF(inv, profile={}) {
-  const num = `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
-  const currCode = profile.currency || "USD"; const m = (n) => new Intl.NumberFormat(CURRENCIES.find(c=>c.code===currCode)?.locale||"en-US",{style:"currency",currency:currCode}).format(n);
+  const num = inv.invoice_number ? `INV-${inv.invoice_number}` : `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
+  const currCode = inv.currency || profile.currency || "USD";
+  const m = (n) => new Intl.NumberFormat(CURRENCIES.find(c=>c.code===currCode)?.locale||"en-US",{style:"currency",currency:currCode}).format(n);
   const d = (v) => v ? new Date(v).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "N/A";
+  const hasVat = inv.vat_rate && inv.vat_amount;
+  const subtotal = inv.subtotal || inv.amount;
+  const vatTotalRow = hasVat ? `
+    <tr><td colspan="2" style="text-align:right;color:#6B7280;font-size:13px">Subtotal</td><td>${m(subtotal)}</td></tr>
+    <tr><td colspan="2" style="text-align:right;color:#6B7280;font-size:13px">VAT (${inv.vat_rate}%)</td><td>${m(inv.vat_amount)}</td></tr>
+  ` : "";
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${num}</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/>
   <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;padding:60px;max-width:800px;margin:0 auto;color:#111}
@@ -686,10 +693,11 @@ function generatePDF(inv, profile={}) {
   .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;background:#F9FAFB;border-radius:10px;padding:20px;margin-bottom:40px}
   table{width:100%;border-collapse:collapse;margin-bottom:32px}thead tr{border-bottom:2px solid #111}
   th{text-align:left;padding:0 0 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6B7280}th:last-child{text-align:right}
-  td{padding:16px 0;border-bottom:1px solid #f0f0f0;font-size:14px}td:last-child{text-align:right;font-weight:700}
+  td{padding:14px 0;border-bottom:1px solid #f0f0f0;font-size:14px}td:last-child{text-align:right;font-weight:700}
   .total{display:flex;justify-content:flex-end;margin-bottom:48px}.tbox{background:#111;color:#fff;padding:22px 32px;border-radius:12px}
   .tlbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9CA3AF;margin-bottom:4px}
   .tamt{font-family:'Playfair Display',serif;font-size:30px;color:#4ade80}
+  .vat-notice{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:12px 16px;margin-bottom:32px;font-size:12px;color:#166534}
   .foot{text-align:center;padding-top:24px;border-top:1px solid #eee;font-size:12px;color:#9CA3AF}
   .pbtn{position:fixed;bottom:24px;right:24px;background:#16a34a;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
   @media print{.pbtn{display:none}}</style></head>
@@ -697,18 +705,24 @@ function generatePDF(inv, profile={}) {
   <div class="top"><div class="logo">Ledgr<span>.</span></div><div style="text-align:right"><h2 style="font-size:24px;font-weight:700">Invoice</h2><div style="color:#6B7280;font-size:13px">${num}</div></div></div>
   <div class="stripe-bar" style="height:3px;background:linear-gradient(90deg,#16a34a,#4ade80);margin-bottom:40px"></div>
   <div class="grid2">
-    <div><div class="lbl">From</div><div class="val">${profile.name||"Your Name"}</div><div class="sub">${profile.email||""}${profile.phone?"<br/>"+profile.phone:""}${profile.address?"<br/>"+profile.address:""}</div></div>
-    <div><div class="lbl">Bill To</div><div class="val">${inv.client}</div></div>
+    <div><div class="lbl">From</div><div class="val">${profile.business_name||profile.name||"Your Name"}</div>
+    <div class="sub">${profile.email||""}${profile.phone?"<br/>"+profile.phone:""}${profile.address?"<br/>"+profile.address:""}${profile.vat_number?"<br/>VAT No: "+profile.vat_number:""}</div></div>
+    <div><div class="lbl">Bill To</div><div class="val">${inv.client}</div>${inv.client_email?`<div class="sub">${inv.client_email}</div>`:""}</div>
   </div>
   <div class="meta">
     <div><div class="lbl">Date</div><div class="val" style="font-size:13px">${d(new Date().toISOString())}</div></div>
     <div><div class="lbl">Due</div><div class="val" style="font-size:13px">${d(inv.due_date)}</div></div>
     <div><div class="lbl">Status</div><div class="val" style="font-size:13px;color:${inv.status==="paid"?"#16a34a":inv.status==="overdue"?"#dc2626":"#d97706"}">${inv.status.charAt(0).toUpperCase()+inv.status.slice(1)}</div></div>
   </div>
-  <table><thead><tr><th style="width:60%">Description</th><th>Type</th><th>Amount</th></tr></thead>
-  <tbody><tr><td>${inv.description||"Services rendered"}</td><td style="color:#6B7280">${inv.type}</td><td>${m(inv.amount)}</td></tr></tbody></table>
-  <div class="total"><div class="tbox"><div class="tlbl">Total Due</div><div class="tamt">${m(inv.amount)}</div></div></div>
-  <div class="foot">Thank you for your business - Generated by Ledgr</div></body></html>`;
+  ${hasVat && profile.vat_number ? `<div class="vat-notice">VAT Registered Business · VAT Number: ${profile.vat_number} · VAT Rate: ${inv.vat_rate}%</div>` : ""}
+  <table><thead><tr><th style="width:55%">Description</th><th>Type</th><th>${hasVat?"Subtotal (excl. VAT)":"Amount"}</th></tr></thead>
+  <tbody>
+    <tr><td>${inv.description||"Services rendered"}</td><td style="color:#6B7280">${inv.type}</td><td>${m(subtotal)}</td></tr>
+    ${vatTotalRow}
+  </tbody></table>
+  <div class="total"><div class="tbox"><div class="tlbl">Total Due${hasVat?" (inc. VAT)":""}</div><div class="tamt">${m(inv.amount)}</div></div></div>
+  ${inv.notes?`<div style="margin-bottom:32px;padding:16px;background:#F9FAFB;border-radius:8px;font-size:13px;color:#555"><strong>Notes:</strong> ${inv.notes}</div>`:""}
+  <div class="foot">Thank you for your business · Generated by Ledgr</div></body></html>`;
   const w = window.open("","_blank"); w.document.write(html); w.document.close();
 }
 
@@ -761,6 +775,7 @@ export default function App() {
   const [newExp, setNewExp] = useState({ name:"", amount:"", category:"", date:"", type:"business" });
   const [newAlr, setNewAlr] = useState({ label:"", amount:"", due_date:"", type:"personal" });
   const [editPro, setEditPro] = useState({ name:"", email:"", phone:"", address:"" });
+  const [vatQuarter, setVatQuarter] = useState(() => { const n=new Date(); return `${n.getFullYear()}-Q${Math.ceil((n.getMonth()+1)/3)}`; });
   const _now = new Date(); const _curY = _now.getFullYear();
   const [taxYear, setTaxYear] = useState(_now >= new Date(_curY,3,6) ? _curY : _curY-1);
   const [taxCountry, setTaxCountry] = useState("GB");
@@ -863,16 +878,35 @@ export default function App() {
       else if (newInv.recurring_frequency==="quarterly") d.setMonth(d.getMonth()+3);
       recurring_next_date = d.toISOString().split("T")[0];
     }
-    const row = {...newInv, amount:parseFloat(newInv.amount), user_id:session.user.id, recurring_next_date};
+    // VAT: amount field = subtotal (excl VAT), total = subtotal + vat_amount
+    const subtotal = parseFloat(newInv.amount);
+    const vat_rate = newInv.vat_rate ? parseFloat(newInv.vat_rate) : 0;
+    const vat_amount = parseFloat(((subtotal * vat_rate) / 100).toFixed(2));
+    const total_amount = parseFloat((subtotal + vat_amount).toFixed(2));
+    const row = {
+      ...newInv,
+      amount: total_amount,       // amount = total inc VAT (what client pays)
+      subtotal: subtotal,         // subtotal excl VAT
+      vat_rate: vat_rate || null,
+      vat_amount: vat_amount || null,
+      user_id: session.user.id,
+      recurring_next_date,
+    };
     const { data } = await supabase.from("invoices").insert(row).select().single();
     if (data) setInvoices(p=>[data,...p]);
-    setNewInv({client:"",client_id:null,amount:"",due_date:"",type:"business",description:"",status:"pending",recurring:false,recurring_frequency:"monthly"}); close();
+    setNewInv({client:"",client_id:null,client_email:"",amount:"",due_date:"",type:"business",description:"",status:"pending",recurring:false,recurring_frequency:"monthly",vat_rate:"",currency:""}); close();
   };
   const addExpense = async () => {
     if (!newExp.name||!newExp.amount) return;
-    const { data } = await supabase.from("expenses").insert({...newExp,amount:parseFloat(newExp.amount),user_id:session.user.id}).select().single();
+    const row = {
+      ...newExp,
+      amount: parseFloat(newExp.amount),
+      vat_amount: newExp.vat_amount ? parseFloat(newExp.vat_amount) : null,
+      user_id: session.user.id,
+    };
+    const { data } = await supabase.from("expenses").insert(row).select().single();
     if (data) setExpenses(p=>[data,...p]);
-    setNewExp({name:"",amount:"",category:"",date:"",type:"business"}); close();
+    setNewExp({name:"",amount:"",category:"",date:"",type:"business",vat_amount:""}); close();
   };
   const addAlert = async () => {
     if (!newAlr.label||!newAlr.due_date) return;
@@ -1262,7 +1296,7 @@ ${businessName}`
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",accounts:"⬢",bank:"⬡",charts:"◭"};
@@ -2175,6 +2209,169 @@ ${businessName}`
                 );
               })()}
             </div>
+
+              {/* ── VAT Return Tab ── */}
+              {tab==="vat"&&(()=>{
+                if (!profile?.vat_registered) return (
+                  <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
+                    <div style={{fontSize:40,marginBottom:16}}>🧾</div>
+                    <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:8}}>VAT not enabled</div>
+                    <div style={{fontSize:13,marginBottom:20,maxWidth:340,margin:"0 auto 20px"}}>Enable VAT registration in your Profile to track output and input VAT and prepare quarterly returns.</div>
+                    <Btn onClick={()=>setModal("profile")} style={{padding:"10px 24px"}}>Open Profile Settings</Btn>
+                  </div>
+                );
+
+                // Quarter parsing
+                const [qYear, qLabel] = vatQuarter.split("-");
+                const qNum = parseInt(qLabel.replace("Q",""));
+                const qStartMonth = (qNum-1)*3;
+                const qStart = new Date(parseInt(qYear), qStartMonth, 1);
+                const qEnd = new Date(parseInt(qYear), qStartMonth+3, 0);
+                const inQ = date => { if(!date) return false; const d=new Date(date); return d>=qStart&&d<=qEnd; };
+
+                // Output VAT — collected on paid invoices in this quarter
+                const qInvoices = invoices.filter(i => i.status==="paid" && inQ(i.due_date) && i.vat_amount>0);
+                const outputVat = qInvoices.reduce((s,i) => s+(i.vat_amount||0), 0);
+                const vatableSales = qInvoices.reduce((s,i) => s+(i.subtotal||i.amount), 0);
+
+                // Input VAT — paid on expenses in this quarter
+                const qExpenses = expenses.filter(e => inQ(e.date) && e.vat_amount>0);
+                const inputVat = qExpenses.reduce((s,e) => s+(e.vat_amount||0), 0);
+                const vatableExpenses = qExpenses.reduce((s,e) => s+e.amount, 0);
+
+                const netVat = outputVat - inputVat;
+                const cur = profile?.currency;
+
+                // Generate available quarters (last 8)
+                const quarters = [];
+                const now = new Date();
+                for (let i=0; i<8; i++) {
+                  const d = new Date(now.getFullYear(), now.getMonth() - i*3, 1);
+                  const y = d.getFullYear(); const q = Math.ceil((d.getMonth()+1)/3);
+                  quarters.push(`${y}-Q${q}`);
+                }
+
+                const exportVatCSV = () => {
+                  const rows = [
+                    ["Ledgr VAT Return", `${vatQuarter}`],
+                    ["VAT Number", profile?.vat_number||""],
+                    ["Period", `${qStart.toLocaleDateString("en-GB")} – ${qEnd.toLocaleDateString("en-GB")}`],
+                    [],
+                    ["OUTPUT TAX (Box 1)"],
+                    ["Invoice #","Client","Description","Invoice Date","Net Amount","VAT Rate","VAT Amount"],
+                    ...qInvoices.map(i=>[i.id.slice(-8).toUpperCase(), i.client, i.description, i.due_date, i.subtotal||i.amount, `${i.vat_rate}%`, i.vat_amount]),
+                    [],
+                    ["Total Vatable Sales", vatableSales, "Total Output VAT", outputVat],
+                    [],
+                    ["INPUT TAX (Box 4)"],
+                    ["Expense","Category","Date","Total Amount","VAT Amount"],
+                    ...qExpenses.map(e=>[e.name, e.category, e.date, e.amount, e.vat_amount]),
+                    [],
+                    ["Total Vatable Expenses", vatableExpenses, "Total Input VAT", inputVat],
+                    [],
+                    ["NET VAT DUE (Box 1 - Box 4)", netVat],
+                  ];
+                  const csv = rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
+                  const a = Object.assign(document.createElement("a"),{href:URL.createObjectURL(new Blob([csv],{type:"text/csv"})),download:`ledgr-vat-${vatQuarter}.csv`}); a.click();
+                };
+
+                return (
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:12,flexWrap:"wrap"}}>
+                      <div>
+                        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>VAT Return</h1>
+                        <p style={{color:C.muted,fontSize:13,margin:0}}>
+                          {profile?.vat_number ? `VAT No: ${profile.vat_number}` : "Add your VAT number in Profile"}
+                        </p>
+                      </div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <select value={vatQuarter} onChange={e=>setVatQuarter(e.target.value)}
+                          style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>
+                          {quarters.map(q=><option key={q} value={q}>{q.replace("-"," ").replace("Q","Q")}</option>)}
+                        </select>
+                        <Btn onClick={exportVatCSV} style={{padding:"10px 16px",fontSize:13}}>⬇ Export</Btn>
+                      </div>
+                    </div>
+
+                    {/* Period banner */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 20px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                      <div style={{fontSize:13,color:C.muted}}>Period: <strong style={{color:C.text}}>{qStart.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})} – {qEnd.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</strong></div>
+                      {!profile?.vat_number && <Btn variant="secondary" onClick={()=>setModal("profile")} style={{padding:"6px 14px",fontSize:12,color:C.warning,border:`1px solid ${C.warning}44`}}>⚠ Add VAT Number</Btn>}
+                    </div>
+
+                    {/* Summary boxes */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
+                      {[
+                        {label:"Output VAT (Box 1)",sub:"VAT charged to clients",value:outputVat,color:C.danger},
+                        {label:"Input VAT (Box 4)",sub:"VAT on your expenses",value:inputVat,color:C.accent},
+                        {label:"Net VAT Due",sub:netVat>=0?"Amount to pay HMRC":"Refund owed to you",value:Math.abs(netVat),color:netVat>=0?C.warning:C.accent,prefix:netVat<0?"Refund: ":""},
+                      ].map((b,i)=>(
+                        <div key={i} style={{background:C.card,border:`1px solid ${b.color}33`,borderRadius:14,padding:"16px"}}>
+                          <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>{b.label}</div>
+                          <div style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?18:22,fontWeight:800,color:b.color,marginBottom:3}}>{b.prefix||""}{money(b.value,cur)}</div>
+                          <div style={{fontSize:11,color:C.muted}}>{b.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* VAT Return box numbers */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,marginBottom:16}}>
+                      <h3 style={{margin:"0 0 14px",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.textDim}}>VAT Return Summary (UK MTD format)</h3>
+                      {[
+                        {box:"Box 1", label:"VAT due on sales and outputs", value:outputVat, color:C.danger},
+                        {box:"Box 2", label:"VAT due on acquisitions from EC", value:0, color:C.muted, note:"if applicable"},
+                        {box:"Box 3", label:"Total VAT due (Box 1 + Box 2)", value:outputVat, color:C.danger},
+                        {box:"Box 4", label:"VAT reclaimed on purchases/expenses", value:inputVat, color:C.accent},
+                        {box:"Box 5", label:"Net VAT to pay / reclaim", value:netVat, color:netVat>=0?C.warning:C.accent, bold:true},
+                        {box:"Box 6", label:"Total value of sales (excl. VAT)", value:vatableSales, color:C.text},
+                        {box:"Box 7", label:"Total value of purchases (excl. VAT)", value:vatableExpenses, color:C.text},
+                      ].map((r,i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
+                          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                            <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:6,background:C.surface,color:C.muted,fontFamily:"monospace"}}>{r.box}</span>
+                            <span style={{fontSize:13,color:C.muted}}>{r.label}{r.note&&<span style={{fontSize:10,color:"#333",marginLeft:6}}>({r.note})</span>}</span>
+                          </div>
+                          <span style={{fontSize:r.bold?15:13,fontWeight:r.bold?800:700,color:r.color,fontFamily:r.bold?"'Playfair Display',serif":"inherit"}}>
+                            {r.value<0?"−":""}{money(Math.abs(r.value),cur)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Invoices with VAT */}
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16,marginBottom:16}}>
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                        <h3 style={{margin:"0 0 14px",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.textDim}}>Invoices with VAT ({qInvoices.length})</h3>
+                        {qInvoices.length===0 ? <p style={{color:C.muted,fontSize:13}}>No VAT invoices this quarter.</p> :
+                          qInvoices.map((inv,i)=>(
+                            <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<qInvoices.length-1?`1px solid ${C.border}`:"none"}}>
+                              <div><div style={{fontSize:13,fontWeight:600}}>{inv.client}</div><div style={{fontSize:11,color:C.muted}}>{inv.vat_rate}% VAT · {inv.due_date}</div></div>
+                              <div style={{textAlign:"right"}}><div style={{fontSize:12,color:C.danger,fontWeight:700}}>+{money(inv.vat_amount,cur)}</div><div style={{fontSize:11,color:C.muted}}>{money(inv.subtotal||inv.amount,cur)} net</div></div>
+                            </div>
+                          ))
+                        }
+                      </div>
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                        <h3 style={{margin:"0 0 14px",fontSize:13,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:C.textDim}}>Expenses with VAT ({qExpenses.length})</h3>
+                        {qExpenses.length===0 ? <p style={{color:C.muted,fontSize:13}}>No VAT expenses this quarter.<br/><span style={{fontSize:11}}>Add VAT amounts when logging expenses to track input tax.</span></p> :
+                          qExpenses.map((exp,i)=>(
+                            <div key={exp.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<qExpenses.length-1?`1px solid ${C.border}`:"none"}}>
+                              <div><div style={{fontSize:13,fontWeight:600}}>{exp.name}</div><div style={{fontSize:11,color:C.muted}}>{exp.category} · {exp.date}</div></div>
+                              <div style={{textAlign:"right"}}><div style={{fontSize:12,color:C.accent,fontWeight:700}}>−{money(exp.vat_amount,cur)}</div><div style={{fontSize:11,color:C.muted}}>of {money(exp.amount,cur)}</div></div>
+                            </div>
+                          ))
+                        }
+                      </div>
+                    </div>
+
+                    {/* Tip */}
+                    <div style={{padding:"14px 18px",background:"#0d1f14",border:"1px solid #4ADE8022",borderRadius:12,fontSize:12,color:C.muted,lineHeight:1.8}}>
+                      💡 <strong style={{color:C.text}}>How to file:</strong> Export the CSV above, then enter the Box figures directly into your HMRC MTD portal, accounting software (Xero, QuickBooks), or send to your accountant. Always verify figures before submitting.
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           )}
         </div>
       </div>
@@ -2190,30 +2387,83 @@ ${businessName}`
         </div>
       )}
 
-      {modal==="invoice"&&(<Modal title="New Invoice" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div>}>
-  {clients.length>0&&<SelectInput label="Pick a Client (optional)" value={newInv.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewInv({...newInv,client_id:e.target.value||null,client:c?c.name:newInv.client,client_email:c?.email||newInv.client_email})}}><option value="">- Enter manually -</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.company?" · "+c.company:""}</option>)}</SelectInput>}
-  <TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
-  <TextInput label="Client Email (for reminders)" type="email" value={newInv.client_email||""} onChange={e=>setNewInv({...newInv,client_email:e.target.value})} placeholder="client@email.com"/>
-  <TextInput label="Amount ($)" type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/>
-  <TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/>
-  <TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/>
-  <SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput>
-  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}>
-    <div>
-      <div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring invoice</div>
-      <div style={{fontSize:12,color:C.muted}}>Auto-generate this invoice on a schedule</div>
-    </div>
-    <div onClick={()=>setNewInv({...newInv,recurring:!newInv.recurring})} style={{width:44,height:24,borderRadius:12,background:newInv.recurring?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
-      <div style={{position:"absolute",top:3,left:newInv.recurring?22:3,width:18,height:18,borderRadius:"50%",background:"white",transition:"left 0.2s"}}/>
-    </div>
-  </div>
-  {newInv.recurring&&<SelectInput label="Frequency" value={newInv.recurring_frequency} onChange={e=>setNewInv({...newInv,recurring_frequency:e.target.value})}>
-    <option value="weekly">Weekly</option>
-    <option value="monthly">Monthly</option>
-    <option value="quarterly">Quarterly</option>
-  </SelectInput>}
-</Modal>)}
-      {modal==="expense"&&(<Modal title="Add Expense" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div>}><TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/><TextInput label="Amount ($)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/><TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/><TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/><SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput></Modal>)}
+      {modal==="invoice"&&(
+        <Modal title="New Invoice" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addInvoice} style={{flex:1}}>Add Invoice</Btn></div>}>
+          {clients.length>0&&<SelectInput label="Pick a Client (optional)" value={newInv.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewInv({...newInv,client_id:e.target.value||null,client:c?c.name:newInv.client,client_email:c?.email||newInv.client_email})}}><option value="">- Enter manually -</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.company?" · "+c.company:""}</option>)}</SelectInput>}
+          <TextInput label="Client Name" value={newInv.client} onChange={e=>setNewInv({...newInv,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
+          <TextInput label="Client Email (for reminders)" type="email" value={newInv.client_email||""} onChange={e=>setNewInv({...newInv,client_email:e.target.value})} placeholder="client@email.com"/>
+          <TextInput label={newInv.vat_rate?"Amount (excl. VAT)":"Amount"} type="number" value={newInv.amount} onChange={e=>setNewInv({...newInv,amount:e.target.value})} placeholder="0.00"/>
+          <TextInput label="Description" value={newInv.description} onChange={e=>setNewInv({...newInv,description:e.target.value})} placeholder="e.g. Web redesign Q2"/>
+          <TextInput label="Notes (optional)" value={newInv.notes||""} onChange={e=>setNewInv({...newInv,notes:e.target.value})} placeholder="Payment terms, bank details…"/>
+          <TextInput label="Due Date" type="date" value={newInv.due_date} onChange={e=>setNewInv({...newInv,due_date:e.target.value})}/>
+          <SelectInput label="Currency" value={newInv.currency||profile?.currency||"USD"} onChange={e=>setNewInv({...newInv,currency:e.target.value})}>
+            {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}
+          </SelectInput>
+          <SelectInput label="Type" value={newInv.type} onChange={e=>setNewInv({...newInv,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput>
+
+          {/* VAT Section */}
+          {profile?.vat_registered && (
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",marginTop:4}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,textTransform:"uppercase",letterSpacing:"0.06em"}}>VAT</div>
+              <SelectInput label="VAT Rate" value={newInv.vat_rate||""} onChange={e=>setNewInv({...newInv,vat_rate:e.target.value})}>
+                <option value="">No VAT</option>
+                <option value="5">5% — Reduced rate</option>
+                <option value="9">9% — EU reduced</option>
+                <option value="10">10% — Austria / Japan</option>
+                <option value="19">19% — Germany standard</option>
+                <option value="20">20% — UK / France / Austria</option>
+                <option value="21">21% — Netherlands / Belgium / Spain</option>
+                <option value="23">23% — Poland / Ireland</option>
+                <option value="25">25% — Sweden / Denmark / Norway</option>
+                <option value="0">0% — Zero rated / exempt</option>
+              </SelectInput>
+              {newInv.vat_rate && parseFloat(newInv.amount) > 0 && (
+                <div style={{marginTop:10,padding:"10px 14px",background:C.card,borderRadius:8,fontSize:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{color:C.muted}}>Subtotal (excl. VAT)</span>
+                    <span style={{color:C.text}}>{money(parseFloat(newInv.amount)||0, newInv.currency||profile?.currency)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{color:C.muted}}>VAT ({newInv.vat_rate}%)</span>
+                    <span style={{color:C.warning}}>{money((parseFloat(newInv.amount)||0)*parseFloat(newInv.vat_rate)/100, newInv.currency||profile?.currency)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",borderTop:`1px solid ${C.border}`,paddingTop:6,marginTop:4}}>
+                    <span style={{color:C.text,fontWeight:700}}>Total (inc. VAT)</span>
+                    <span style={{color:C.accent,fontWeight:700}}>{money((parseFloat(newInv.amount)||0)*(1+parseFloat(newInv.vat_rate)/100), newInv.currency||profile?.currency)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring invoice</div>
+              <div style={{fontSize:12,color:C.muted}}>Auto-generate this invoice on a schedule</div>
+            </div>
+            <div onClick={()=>setNewInv({...newInv,recurring:!newInv.recurring})} style={{width:44,height:24,borderRadius:12,background:newInv.recurring?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+              <div style={{position:"absolute",top:3,left:newInv.recurring?22:3,width:18,height:18,borderRadius:"50%",background:"white",transition:"left 0.2s"}}/>
+            </div>
+          </div>
+          {newInv.recurring&&<SelectInput label="Frequency" value={newInv.recurring_frequency} onChange={e=>setNewInv({...newInv,recurring_frequency:e.target.value})}>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+          </SelectInput>}
+        </Modal>
+      )}
+      {modal==="expense"&&(
+        <Modal title="Add Expense" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addExpense} style={{flex:1}}>Add Expense</Btn></div>}>
+          <TextInput label="Name" value={newExp.name} onChange={e=>setNewExp({...newExp,name:e.target.value})} placeholder="e.g. Figma Pro"/>
+          <TextInput label="Amount (total inc. VAT if applicable)" type="number" value={newExp.amount} onChange={e=>setNewExp({...newExp,amount:e.target.value})} placeholder="0.00"/>
+          {profile?.vat_registered && (
+            <TextInput label="VAT Amount (input tax you can reclaim)" type="number" value={newExp.vat_amount||""} onChange={e=>setNewExp({...newExp,vat_amount:e.target.value})} placeholder="0.00"/>
+          )}
+          <TextInput label="Category" value={newExp.category} onChange={e=>setNewExp({...newExp,category:e.target.value})} placeholder="e.g. Software, Meals"/>
+          <TextInput label="Date" type="date" value={newExp.date} onChange={e=>setNewExp({...newExp,date:e.target.value})}/>
+          <SelectInput label="Type" value={newExp.type} onChange={e=>setNewExp({...newExp,type:e.target.value})}><option value="business">Business</option><option value="personal">Personal</option></SelectInput>
+        </Modal>
+      )}
       {modal==="alert"&&(<Modal title="New Alert" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addAlert} style={{flex:1}}>Set Alert</Btn></div>}><TextInput label="Label" value={newAlr.label} onChange={e=>setNewAlr({...newAlr,label:e.target.value})} placeholder="e.g. Rent, Subscription"/><TextInput label="Amount ($) optional" type="number" value={newAlr.amount} onChange={e=>setNewAlr({...newAlr,amount:e.target.value})} placeholder="0.00"/><TextInput label="Due Date" type="date" value={newAlr.due_date} onChange={e=>setNewAlr({...newAlr,due_date:e.target.value})}/><SelectInput label="Type" value={newAlr.type} onChange={e=>setNewAlr({...newAlr,type:e.target.value})}><option value="personal">Personal</option><option value="business">Business</option></SelectInput></Modal>)}
       {modal==="csv-import"&&(
   <Modal title="Import Bank Statement" onClose={()=>{close();setCsvStep(1);setCsvRows([]);setCsvHeaders([]);}}
@@ -2695,6 +2945,41 @@ ${businessName}`
                 </p>
               </div>
             )}
+          </div>
+
+          {/* ── VAT Settings ── */}
+          <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:20}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}}>VAT / Sales Tax</div>
+            <div style={{fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:14}}>
+              Enable to add VAT to invoices and track it in the VAT Return tab. Required for UK VAT-registered businesses and EU freelancers.
+            </div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:C.text}}>VAT Registered</div>
+                <div style={{fontSize:12,color:C.muted}}>Show VAT fields on invoices</div>
+              </div>
+              <div onClick={()=>setEditPro({...editPro,vat_registered:!editPro.vat_registered})}
+                style={{width:44,height:24,borderRadius:12,background:editPro.vat_registered?C.accent:C.border,cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+                <div style={{position:"absolute",top:3,left:editPro.vat_registered?22:3,width:18,height:18,borderRadius:"50%",background:"white",transition:"left 0.2s"}}/>
+              </div>
+            </div>
+            {editPro.vat_registered && (<>
+              <TextInput label="VAT Number" value={editPro.vat_number||""} onChange={e=>setEditPro({...editPro,vat_number:e.target.value})} placeholder="e.g. GB123456789 / DE123456789"/>
+              <SelectInput label="Default VAT Rate" value={editPro.default_vat_rate||"20"} onChange={e=>setEditPro({...editPro,default_vat_rate:e.target.value})}>
+                <option value="5">5% — UK reduced rate</option>
+                <option value="9">9% — EU reduced rate</option>
+                <option value="10">10% — Austria / Japan</option>
+                <option value="19">19% — Germany standard</option>
+                <option value="20">20% — UK / France / Austria</option>
+                <option value="21">21% — Netherlands / Belgium / Spain</option>
+                <option value="23">23% — Poland / Ireland</option>
+                <option value="25">25% — Sweden / Denmark / Norway</option>
+                <option value="0">0% — Zero rated / exempt</option>
+              </SelectInput>
+              <div style={{padding:"12px 14px",background:"#0d1f14",border:"1px solid #4ADE8022",borderRadius:10,fontSize:12,color:C.muted,lineHeight:1.7,marginTop:4}}>
+                💡 Your VAT number will appear on all PDF invoices. Use the <strong style={{color:C.text}}>VAT tab</strong> to file your quarterly return and see output vs input VAT.
+              </div>
+            </>)}
           </div>
         </Modal>
       )}
