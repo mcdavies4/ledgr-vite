@@ -2208,7 +2208,6 @@ ${businessName}`
                   </div>
                 );
               })()}
-            </div>
 
               {/* ── VAT Return Tab ── */}
               {tab==="vat"&&(()=>{
