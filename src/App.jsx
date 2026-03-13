@@ -17,21 +17,44 @@ const C = {
 };
 
 const CURRENCIES = [
-  { code:"USD", label:"USD - US Dollar", locale:"en-US" },
-  { code:"EUR", label:"EUR - Euro", locale:"de-DE" },
-  { code:"GBP", label:"GBP - British Pound", locale:"en-GB" },
-  { code:"NGN", label:"NGN - Nigerian Naira", locale:"en-NG" },
-  { code:"CAD", label:"CAD - Canadian Dollar", locale:"en-CA" },
-  { code:"AUD", label:"AUD - Australian Dollar", locale:"en-AU" },
+  // Major global
+  { code:"USD", label:"USD - US Dollar",         locale:"en-US" },
+  { code:"EUR", label:"EUR - Euro",               locale:"de-DE" },
+  { code:"GBP", label:"GBP - British Pound",      locale:"en-GB" },
+  // Africa
+  { code:"NGN", label:"NGN - Nigerian Naira",     locale:"en-NG" },
   { code:"ZAR", label:"ZAR - South African Rand", locale:"en-ZA" },
-  { code:"GHS", label:"GHS - Ghanaian Cedi", locale:"en-GH" },
-  { code:"KES", label:"KES - Kenyan Shilling", locale:"en-KE" },
-  { code:"INR", label:"INR - Indian Rupee", locale:"en-IN" },
-  { code:"JPY", label:"JPY - Japanese Yen", locale:"ja-JP" },
-  { code:"CNY", label:"CNY - Chinese Yuan", locale:"zh-CN" },
-  { code:"BRL", label:"BRL - Brazilian Real", locale:"pt-BR" },
-  { code:"MXN", label:"MXN - Mexican Peso", locale:"es-MX" },
-  { code:"AED", label:"AED - UAE Dirham", locale:"ar-AE" },
+  { code:"GHS", label:"GHS - Ghanaian Cedi",      locale:"en-GH" },
+  { code:"KES", label:"KES - Kenyan Shilling",    locale:"en-KE" },
+  // Americas
+  { code:"CAD", label:"CAD - Canadian Dollar",    locale:"en-CA" },
+  { code:"AUD", label:"AUD - Australian Dollar",  locale:"en-AU" },
+  { code:"BRL", label:"BRL - Brazilian Real",     locale:"pt-BR" },
+  { code:"MXN", label:"MXN - Mexican Peso",       locale:"es-MX" },
+  // Europe (non-Euro)
+  { code:"CHF", label:"CHF - Swiss Franc",        locale:"de-CH" },
+  { code:"SEK", label:"SEK - Swedish Krona",      locale:"sv-SE" },
+  { code:"NOK", label:"NOK - Norwegian Krone",    locale:"nb-NO" },
+  { code:"DKK", label:"DKK - Danish Krone",       locale:"da-DK" },
+  { code:"PLN", label:"PLN - Polish Złoty",       locale:"pl-PL" },
+  { code:"CZK", label:"CZK - Czech Koruna",       locale:"cs-CZ" },
+  { code:"HUF", label:"HUF - Hungarian Forint",   locale:"hu-HU" },
+  { code:"RON", label:"RON - Romanian Leu",       locale:"ro-RO" },
+  // Asia
+  { code:"INR", label:"INR - Indian Rupee",       locale:"en-IN" },
+  { code:"JPY", label:"JPY - Japanese Yen",       locale:"ja-JP" },
+  { code:"CNY", label:"CNY - Chinese Yuan",       locale:"zh-CN" },
+  { code:"SGD", label:"SGD - Singapore Dollar",   locale:"en-SG" },
+  { code:"MYR", label:"MYR - Malaysian Ringgit",  locale:"ms-MY" },
+  { code:"PHP", label:"PHP - Philippine Peso",    locale:"en-PH" },
+  { code:"IDR", label:"IDR - Indonesian Rupiah",  locale:"id-ID" },
+  { code:"THB", label:"THB - Thai Baht",          locale:"th-TH" },
+  { code:"VND", label:"VND - Vietnamese Dong",    locale:"vi-VN" },
+  { code:"PKR", label:"PKR - Pakistani Rupee",    locale:"en-PK" },
+  { code:"BDT", label:"BDT - Bangladeshi Taka",   locale:"bn-BD" },
+  // Middle East
+  { code:"AED", label:"AED - UAE Dirham",         locale:"ar-AE" },
+  { code:"SAR", label:"SAR - Saudi Riyal",        locale:"ar-SA" },
 ];
 
 const getCurrency = () => {
@@ -1938,8 +1961,71 @@ ${businessName}`
                     deadline: y=>`31 Oct ${y+1}`, deadlineNote:"ATO Tax Return",
                     calc: p=>{ let it=0;const bands=[[18200,0],[26800,0.19],[45000,0.325],[90000,0.37],[Infinity,0.45]];let rem=p;for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);it+=chunk*rate;rem-=chunk;}const medicare=p>26000?p*0.02:0;return{rows:[{l:"Taxable Income",v:p},{l:"Income Tax (graduated)",v:it},{l:"Medicare Levy (2%)",v:medicare}],total:it+medicare};}
                   },
-                };
 
+                  // ── Europe ──────────────────────────────────────────────
+                  DE: { flag:"🇩🇪", name:"Germany", currency:"EUR",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`31 Jul ${y+1}`, deadlineNote:"Steuererklärung",
+                    calc: p=>{ const pa=11604;const ti=Math.max(0,p-pa);let it=0;if(ti<=0)it=0;else if(ti<=17005){const y=(ti-9984)/10000;it=(979.18*y+1400)*y;}else if(ti<=66760){const y=(ti-14926)/10000;it=(192.59*y+2397)*y+966.53;}else if(ti<=277825)it=ti*0.42-10602.13;else it=ti*0.45-18307.73;const sol=it>18130?it*0.055:0;const kv=p*0.073;const rv=Math.min(p,87600)*0.093;return{rows:[{l:"Gross Income",v:p},{l:"Basic Allowance (−)",v:-pa,note:"Grundfreibetrag 2024"},{l:"Taxable Income",v:ti},{l:"Income Tax (Einkommensteuer)",v:it},{l:"Solidarity Surcharge (5.5%)",v:sol,note:"if applicable"},{l:"Health Insurance est. (7.3%)",v:kv},{l:"Pension Insurance est. (9.3%)",v:rv}],total:it+sol};}
+                  },
+                  FR: { flag:"🇫🇷", name:"France", currency:"EUR",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`May/Jun ${y+1}`, deadlineNote:"Déclaration des revenus",
+                    calc: p=>{ let it=0,rem=p;const bands=[[11294,0],[16532,0.11],[49623,0.30],[89981,0.41],[Infinity,0.45]];for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);it+=chunk*rate;rem-=chunk;}const css=p*0.22;return{rows:[{l:"Gross Income",v:p},{l:"Income Tax (Impôt sur le revenu)",v:it},{l:"Social Charges (22%)",v:css,note:"CSG/CRDS/SS auto-entrepreneur"}],total:it+css};}
+                  },
+                  NL: { flag:"🇳🇱", name:"Netherlands", currency:"EUR",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`1 May ${y+1}`, deadlineNote:"Belastingdienst aangifte",
+                    calc: p=>{ const box1Limit=75518;let it=0;if(p<=38441)it=p*0.3697;else if(p<=box1Limit)it=38441*0.3697+(p-38441)*0.3697;else it=box1Limit*0.3697+(p-box1Limit)*0.495;const mkb=Math.min(p*0.1277,7280);const av=Math.min(3070,Math.max(0,p<=24813?p*0.03:3070-(p-24813)*0.06));const taxable=Math.max(0,it-mkb-av);return{rows:[{l:"Gross Income",v:p},{l:"Box 1 Tax (36.97%/49.5%)",v:it},{l:"MKB-winstvrijstelling (−)",v:-mkb,note:"12.7% self-employed deduction"},{l:"Arbeidskorting (−)",v:-av,note:"Employment credit"},{l:"Estimated Tax",v:taxable}],total:taxable};}
+                  },
+                  ES: { flag:"🇪🇸", name:"Spain", currency:"EUR",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`30 Jun ${y+1}`, deadlineNote:"Declaración de la Renta",
+                    calc: p=>{ let it=0,rem=p;const bands=[[12450,0.19],[7750,0.24],[15000,0.30],[24800,0.37],[Infinity,0.47]];for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);it+=chunk*rate;rem-=chunk;}const ss=Math.min(p,56700)*0.063;return{rows:[{l:"Gross Income",v:p},{l:"Income Tax (IRPF)",v:it},{l:"Social Security (6.3%)",v:ss,note:"Autónomos"}],total:it+ss};}
+                  },
+                  SE: { flag:"🇸🇪", name:"Sweden", currency:"SEK",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`2 May ${y+1}`, deadlineNote:"Inkomstdeklaration",
+                    calc: p=>{ const mun=p*0.32;let state=0;if(p>598500)state=(p-598500)*0.20;const ea=p*0.2825;return{rows:[{l:"Gross Income",v:p},{l:"Municipal Tax (~32%)",v:mun,note:"varies by municipality"},{l:"State Tax (20% above 598,500 SEK)",v:state},{l:"Egenavgifter (28.25%)",v:ea,note:"Self-employed social contributions"}],total:mun+state+ea};}
+                  },
+                  CH: { flag:"🇨🇭", name:"Switzerland", currency:"CHF",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`31 Mar ${y+1}`, deadlineNote:"Steuererklärung",
+                    calc: p=>{ let fed=0,rem=p;const bands=[[17800,0],[914,0.0077],[4721,0.0088],[782,0.0264],[28367,0.0296],[Infinity,0.1132]];for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);fed+=chunk*rate;rem-=chunk;}const cantonal=p*0.10;const ahv=p*0.10;return{rows:[{l:"Gross Income",v:p},{l:"Federal Tax (Direkte Bundessteuer)",v:fed},{l:"Cantonal/Municipal Tax (est. 10%)",v:cantonal,note:"varies by canton"},{l:"AHV/IV/EO (10%)",v:ahv,note:"Social insurance — self-employed"}],total:fed+cantonal+ahv};}
+                  },
+
+                  // ── Asia ────────────────────────────────────────────────
+                  IN: { flag:"🇮🇳", name:"India", currency:"INR",
+                    yearLabel: y=>`Apr ${y} – Mar ${y+1}`,
+                    yearStart: y=>new Date(y,3,1), yearEnd: y=>new Date(y+1,2,31),
+                    deadline: y=>`31 Jul ${y+1}`, deadlineNote:"ITR Filing",
+                    calc: p=>{ const pa=300000;const ti=Math.max(0,p-pa);let it=0,rem=ti;const bands=[[300000,0.05],[300000,0.10],[300000,0.15],[300000,0.20],[Infinity,0.30]];for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);it+=chunk*rate;rem-=chunk;}const cess=it*0.04;return{rows:[{l:"Gross Income",v:p},{l:"Basic Exemption (−)",v:-pa,note:"New regime 2024-25"},{l:"Taxable Income",v:ti},{l:"Income Tax",v:it},{l:"Health & Education Cess (4%)",v:cess}],total:it+cess};}
+                  },
+                  SG: { flag:"🇸🇬", name:"Singapore", currency:"SGD",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`18 Apr ${y+1}`, deadlineNote:"IRAS e-Filing",
+                    calc: p=>{ let it=0,rem=p;const bands=[[20000,0],[10000,0.02],[10000,0.035],[40000,0.07],[40000,0.115],[40000,0.15],[40000,0.18],[40000,0.19],[40000,0.195],[40000,0.20],[Infinity,0.22]];for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);it+=chunk*rate;rem-=chunk;}return{rows:[{l:"Chargeable Income",v:p},{l:"Income Tax",v:it,note:"Resident rates 2024"}],total:it};}
+                  },
+                  JP: { flag:"🇯🇵", name:"Japan", currency:"JPY",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`15 Mar ${y+1}`, deadlineNote:"確定申告 (Kakutei Shinkoku)",
+                    calc: p=>{ const ded=480000;const ti=Math.max(0,p-ded);let it=0,rem=ti;const bands=[[1950000,0.05],[1950000,0.10],[1950000,0.20],[9000000,0.23],[4000000,0.33],[18000000,0.40],[Infinity,0.45]];for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);it+=chunk*rate;rem-=chunk;}const residentTax=ti*0.10;const復興=it*0.021;return{rows:[{l:"Gross Income",v:p},{l:"Basic Deduction (−)",v:-ded},{l:"Taxable Income",v:ti},{l:"National Income Tax",v:it},{l:"Reconstruction Surtax (2.1%)",v:復興},{l:"Resident Tax (~10%)",v:residentTax}],total:it+復興+residentTax};}
+                  },
+                  MY: { flag:"🇲🇾", name:"Malaysia", currency:"MYR",
+                    yearLabel: y=>`Jan – Dec ${y}`,
+                    yearStart: y=>new Date(y,0,1), yearEnd: y=>new Date(y,11,31),
+                    deadline: y=>`30 Jun ${y+1}`, deadlineNote:"LHDN e-Filing",
+                    calc: p=>{ let it=0,rem=p;const bands=[[5000,0],[15000,0.01],[15000,0.03],[15000,0.06],[20000,0.11],[30000,0.19],[30000,0.25],[Infinity,0.26]];for(const [lim,rate] of bands){if(rem<=0)break;const chunk=Math.min(rem,lim);it+=chunk*rate;rem-=chunk;}return{rows:[{l:"Chargeable Income",v:p},{l:"Income Tax",v:it,note:"Resident rates 2024"}],total:it};}
+                  },
+                };
                 const country = TAX_COUNTRIES[taxCountry]||TAX_COUNTRIES.GB;
                 const tyStart = country.yearStart(taxYear);
                 const tyEnd = country.yearEnd(taxYear);
