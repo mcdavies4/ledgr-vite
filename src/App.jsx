@@ -4,7 +4,7 @@ import ContactPage from "./ContactPage";
 import AboutPage from "./AboutPage";
 import PrivacyPage from "./PrivacyPage";
 import { supabase } from "./supabase";
-import { startCheckout } from "./stripe";
+import { startCheckout, PRICE_MONTHLY, PRICE_ANNUAL } from "./stripe";
 
 const C = {
   bg: "#080B10", surface: "#0F1318", card: "#141A22", border: "#1E2535",
@@ -185,12 +185,13 @@ function Modal({ title, onClose, children, wide=false, footer=null }) {
 // ── Paywall Screen ────────────────────────────────────────────────────────────
 function PaywallScreen({ session, onSignOut }) {
   const [loading, setLoading] = useState(false);
-
+  const [plan, setPlan] = useState("annual"); // default to annual — better value
   const [subError, setSubError] = useState("");
+
   const handleSubscribe = async () => {
     setLoading(true); setSubError("");
     try {
-      await startCheckout(session.user.id, session.user.email);
+      await startCheckout(session.user.id, session.user.email, plan === "annual" ? PRICE_ANNUAL : PRICE_MONTHLY);
     } catch (e) {
       setSubError(e.message || "Something went wrong. Please try again.");
       setLoading(false);
@@ -200,46 +201,68 @@ function PaywallScreen({ session, onSignOut }) {
   return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:20, fontFamily:"'DM Sans',sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-      <div style={{ width:"100%", maxWidth:440 }}>
+      <div style={{ width:"100%", maxWidth:460 }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ width:52, height:52, background:C.accent, borderRadius:14, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, color:"#0D0F14", marginBottom:16 }}>L</div>
           <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:C.text, margin:"0 0 8px" }}>Ledgr Pro</h1>
-          <p style={{ color:C.muted, fontSize:15, margin:0 }}>Your free trial has ended.</p>
+          <p style={{ color:C.muted, fontSize:15, margin:0 }}>Your free trial has ended. Choose a plan to continue.</p>
+        </div>
+
+        {/* Plan toggle */}
+        <div style={{ display:"flex", gap:8, marginBottom:16, background:C.surface, borderRadius:12, padding:4, border:`1px solid ${C.border}` }}>
+          {[
+            { id:"monthly", label:"Monthly", price:"$15/mo", sub:"Billed monthly" },
+            { id:"annual",  label:"Annual",  price:"$120/yr", sub:"Save $60 — 2 months free", badge:"BEST VALUE" },
+          ].map(p=>(
+            <button key={p.id} onClick={()=>setPlan(p.id)} style={{
+              flex:1, padding:"12px 8px", borderRadius:9, border:"none", cursor:"pointer",
+              background: plan===p.id ? C.card : "transparent",
+              boxShadow: plan===p.id ? `0 0 0 1px ${C.accent}44, inset 0 0 0 1px ${C.accent}22` : "none",
+              fontFamily:"'DM Sans',sans-serif", transition:"all 0.15s", position:"relative",
+            }}>
+              {p.badge && plan===p.id && <span style={{position:"absolute",top:-8,left:"50%",transform:"translateX(-50%)",background:C.accent,color:"#060A0F",fontSize:8,fontWeight:800,padding:"2px 8px",borderRadius:8,letterSpacing:"0.08em",whiteSpace:"nowrap"}}>{p.badge}</span>}
+              <div style={{ fontSize:13, fontWeight:700, color: plan===p.id ? C.text : C.muted, marginBottom:2 }}>{p.label}</div>
+              <div style={{ fontSize:15, fontWeight:800, color: plan===p.id ? C.accent : C.textDim, fontFamily:"'Playfair Display',serif" }}>{p.price}</div>
+              <div style={{ fontSize:10, color: plan===p.id ? C.muted : "#2A3A4A", marginTop:2 }}>{p.sub}</div>
+            </button>
+          ))}
         </div>
 
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:20, overflow:"hidden", marginBottom:16 }}>
-          {/* Price header */}
-          <div style={{ background:C.accentDim, borderBottom:`1px solid ${C.border}`, padding:"28px 32px", textAlign:"center" }}>
-            <div style={{ color:C.accent, fontSize:42, fontWeight:700, fontFamily:"'Playfair Display',serif", lineHeight:1 }}>$15</div>
-            <div style={{ color:C.textDim, fontSize:14, marginTop:4 }}>per month · cancel anytime</div>
+          <div style={{ background:C.accentDim, borderBottom:`1px solid ${C.border}`, padding:"20px 32px", textAlign:"center" }}>
+            <div style={{ color:C.accent, fontSize:40, fontWeight:700, fontFamily:"'Playfair Display',serif", lineHeight:1 }}>
+              {plan === "annual" ? "$120" : "$15"}
+            </div>
+            <div style={{ color:C.textDim, fontSize:13, marginTop:4 }}>
+              {plan === "annual" ? "per year — save $60 vs monthly" : "per month · cancel anytime"}
+            </div>
           </div>
 
-          {/* Features */}
           <div style={{ padding:"24px 32px" }}>
             {[
               "Unlimited invoices & PDF export",
-              "Expense tracking & CSV export",
-              "Payment alerts & reminders",
-              "Monthly trend charts",
-              "Business & personal views",
-              "Syncs across all your devices",
+              "Stripe payment links (money direct to you)",
+              "Expense tracking & bank CSV import",
+              "Tax estimates for 18 countries",
+              "VAT returns & quarterly tracking",
+              "32 currencies · Client portal",
             ].map((f, i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:14 }}>
-                <div style={{ width:20, height:20, borderRadius:"50%", background:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <span style={{ color:C.accent, fontSize:11, fontWeight:700 }}>✓</span>
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+                <div style={{ width:18, height:18, borderRadius:"50%", background:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <span style={{ color:C.accent, fontSize:10, fontWeight:700 }}>✓</span>
                 </div>
-                <span style={{ fontSize:14, color:C.textDim }}>{f}</span>
+                <span style={{ fontSize:13, color:C.textDim }}>{f}</span>
               </div>
             ))}
           </div>
 
           <div style={{ padding:"0 32px 28px" }}>
             <Btn onClick={handleSubscribe} disabled={loading} style={{ width:"100%", fontSize:15, padding:"14px" }}>
-              {loading ? "Redirecting to Stripe..." : "Subscribe for $15/mo"}
+              {loading ? "Redirecting to Stripe..." : plan === "annual" ? "Subscribe — $120/year →" : "Subscribe — $15/month →"}
             </Btn>
             {subError && <div style={{background:C.dangerDim,border:`1px solid ${C.danger}44`,borderRadius:8,padding:"10px 14px",color:C.danger,fontSize:12,marginTop:8}}>{subError}</div>}
             <p style={{ color:C.muted, fontSize:12, textAlign:"center", marginTop:12, marginBottom:0 }}>
-              Secured by Stripe · No hidden fees
+              Secured by Stripe · Cancel anytime · No hidden fees
             </p>
           </div>
         </div>
@@ -256,7 +279,7 @@ function PaywallScreen({ session, onSignOut }) {
 
 // ── Trial Banner ──────────────────────────────────────────────────────────────
 function TrialBanner({ profile, session }) {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(null);
   const [err, setErr] = useState("");
   if (!profile?.trial_ends_at) return null;
   const status = profile?.subscription_status;
@@ -265,21 +288,26 @@ function TrialBanner({ profile, session }) {
   if (days <= 0) return null;
   const urgent = days <= 3;
 
-  const handleUpgrade = async () => {
-    setLoading(true); setErr("");
-    try { await startCheckout(session.user.id, session.user.email); }
-    catch(e) { setErr(e.message || "Unknown error"); setLoading(false); }
+  const handleUpgrade = async (priceId, label) => {
+    setLoading(label); setErr("");
+    try { await startCheckout(session.user.id, session.user.email, priceId); }
+    catch(e) { setErr(e.message || "Unknown error"); setLoading(null); }
   };
 
   return (
-    <div style={{ background: urgent ? "#3a1a0a" : "#1a2a1a", borderBottom:`1px solid ${urgent ? C.danger+"44" : C.accent+"44"}`, padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+    <div style={{ background: urgent ? "#3a1a0a" : "#0d1a0f", borderBottom:`1px solid ${urgent ? C.danger+"44" : C.accent+"22"}`, padding:"8px 20px", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
       <span style={{ fontSize:13, color: urgent ? C.danger : C.accent, fontWeight:500 }}>
-        {urgent ? "⚠️" : "⏳"} {days} day{days===1?"":"s"} left in your free trial
+        {urgent ? "⚠️" : "⏳"} {days} day{days===1?"":"s"} left in your trial
       </span>
       {err && <span style={{fontSize:12,color:C.danger,background:C.dangerDim,padding:"3px 10px",borderRadius:6}}>{err}</span>}
-      <button onClick={handleUpgrade} disabled={loading} style={{ marginLeft:"auto", background:C.accent, color:"#060A0E", border:"none", borderRadius:8, padding:"7px 16px", fontSize:12, fontWeight:700, cursor:loading?"not-allowed":"pointer", whiteSpace:"nowrap", opacity:loading?0.7:1 }}>
-        {loading ? "Opening Stripe..." : "Upgrade - $15/mo"}
-      </button>
+      <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <button onClick={()=>handleUpgrade(PRICE_ANNUAL,"annual")} disabled={!!loading} style={{ background:C.accent, color:"#060A0E", border:"none", borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:loading?"not-allowed":"pointer", whiteSpace:"nowrap", opacity:loading?0.7:1, display:"flex", alignItems:"center", gap:6 }}>
+          {loading==="annual" ? "Opening Stripe..." : <><span style={{background:"rgba(0,0,0,0.15)",borderRadius:4,padding:"1px 5px",fontSize:9,fontWeight:800,letterSpacing:"0.06em"}}>SAVE $60</span> $120/year</>}
+        </button>
+        <button onClick={()=>handleUpgrade(PRICE_MONTHLY,"monthly")} disabled={!!loading} style={{ background:"transparent", color:C.muted, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:600, cursor:loading?"not-allowed":"pointer", whiteSpace:"nowrap", opacity:loading?0.7:1 }}>
+          {loading==="monthly" ? "..." : "$15/mo"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -295,6 +323,7 @@ function LandingOrAuth() {
 // ── Landing Page ──────────────────────────────────────────────────────────────
 function LandingPage({ onGetStarted }) {
   const [activeFaq, setActiveFaq] = useState(null);
+  const [billing, setBilling] = useState("annual"); // default annual
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:"#060A0F",color:"#F1F5F9",minHeight:"100vh",overflowX:"hidden"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -514,13 +543,36 @@ function LandingPage({ onGetStarted }) {
       {/* ── Pricing ── */}
       <div id="pricing" style={{maxWidth:480,margin:"0 auto 100px",padding:"0 24px",textAlign:"center"}}>
         <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:16}}>Pricing</div>
-        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 40px",letterSpacing:"-0.02em"}}>One plan.<br/>Everything included.</h2>
+        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 32px",letterSpacing:"-0.02em"}}>One plan.<br/>Everything included.</h2>
+
+        {/* Billing toggle */}
+        <div style={{display:"flex",gap:4,marginBottom:24,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4,border:"1px solid rgba(255,255,255,0.06)",maxWidth:280,margin:"0 auto 24px"}}>
+          {[
+            {id:"monthly",label:"Monthly"},
+            {id:"annual", label:"Annual"},
+          ].map(b=>(
+            <button key={b.id} onClick={()=>setBilling(b.id)} style={{
+              flex:1,padding:"8px 12px",borderRadius:9,border:"none",cursor:"pointer",
+              background:billing===b.id?"#0C1118":"transparent",
+              color:billing===b.id?"#F1F5F9":"#3D4A5C",
+              fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",
+              boxShadow:billing===b.id?"0 0 0 1px rgba(74,222,128,0.2)":"none",
+              transition:"all 0.15s",
+            }}>{b.label}{b.id==="annual"&&<span style={{fontSize:9,fontWeight:800,background:billing==="annual"?"#4ADE80":"#1a2a1a",color:billing==="annual"?"#060A0F":"#4ADE80",borderRadius:6,padding:"1px 5px",marginLeft:6,letterSpacing:"0.06em"}}>-33%</span>}</button>
+          ))}
+        </div>
+
         <div style={{background:"#0C1118",border:"1px solid rgba(74,222,128,0.15)",borderRadius:20,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,0.4)"}}>
           <div style={{background:"linear-gradient(160deg,#0d2018,#0a1a0f)",borderBottom:"1px solid rgba(74,222,128,0.1)",padding:"36px 32px",textAlign:"center",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:"-30%",left:"50%",transform:"translateX(-50%)",width:200,height:200,background:"radial-gradient(ellipse,rgba(74,222,128,0.12) 0%,transparent 70%)"}}/>
             <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Pro Plan</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:64,fontWeight:900,color:"#4ADE80",lineHeight:1,position:"relative"}}>£15</div>
-            <div style={{color:"#3D4A5C",fontSize:13,marginTop:8}}>per month · cancel anytime</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:64,fontWeight:900,color:"#4ADE80",lineHeight:1,position:"relative"}}>
+              {billing==="annual" ? "$120" : "$15"}
+            </div>
+            <div style={{color:"#3D4A5C",fontSize:13,marginTop:8}}>
+              {billing==="annual" ? "per year — save $60 vs monthly" : "per month · cancel anytime"}
+            </div>
+            {billing==="annual"&&<div style={{marginTop:10,display:"inline-block",background:"rgba(74,222,128,0.1)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:8,padding:"3px 10px",fontSize:11,color:"#4ADE80",fontWeight:600}}>That's just $10/month</div>}
           </div>
           <div style={{padding:"28px 32px"}}>
             {[
@@ -543,7 +595,7 @@ function LandingPage({ onGetStarted }) {
             <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{width:"100%",background:"#4ADE80",border:"none",color:"#060A0F",padding:"15px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginTop:12,boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
               Start 14-day free trial →
             </button>
-            <p style={{color:"#2A3A4A",fontSize:11,marginTop:12,textAlign:"center"}}>No card needed · Works in 18 countries</p>
+            <p style={{color:"#2A3A4A",fontSize:11,marginTop:12,textAlign:"center"}}>No card needed · Choose plan after trial</p>
           </div>
         </div>
       </div>
