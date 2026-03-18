@@ -182,6 +182,375 @@ function Modal({ title, onClose, children, wide=false, footer=null }) {
   );
 }
 
+
+// ── AI Assistant Tab ──────────────────────────────────────────────────────────
+function AITabs({ financeContext, invoices, clients, expenses, profile, session, money, cur, C, isMobile, overdueInvs }) {
+  const [subTab, setSubTab] = useState("insights");
+
+  // ── Insights state ──
+  const [messages, setMessages] = useState([
+    { role:"assistant", content:"Hi! I have access to your live financial data — invoices, expenses, cash flow, and overdue payments. Ask me anything about your finances, or try one of the suggestions below." }
+  ]);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+
+  // ── Email state ──
+  const [emailClient, setEmailClient] = useState("");
+  const [emailIntent, setEmailIntent] = useState("chase");
+  const [emailContext, setEmailContext] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  // ── Statement state ──
+  const [statementText, setStatementText] = useState("");
+  const [statementResult, setStatementResult] = useState(null);
+  const [statementLoading, setStatementLoading] = useState(false);
+
+  const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoanlidnBobWx6Z2hkZWJvbnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTI2MDIsImV4cCI6MjA4ODE2ODYwMn0.6r7C6aQPn0YTjmDjRkP8fVd6cQhXJ_L1jBYqsu2qRWM";
+  const SUPABASE_URL_AI = "https://phjybvphmlzghdebonzy.supabase.co";
+
+  const callClaude = async (systemPrompt, userMessage, history=[]) => {
+    const msgs = [...history, { role:"user", content: userMessage }];
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1000,
+        system: systemPrompt,
+        messages: msgs,
+      }),
+    });
+    const data = await res.json();
+    return data.content?.[0]?.text || "Sorry, I couldn't generate a response.";
+  };
+
+  // ── Insights: send message ──
+  const sendMessage = async (text) => {
+    const userMsg = text || input.trim();
+    if (!userMsg || thinking) return;
+    setInput("");
+    const history = messages.filter(m=>m.role!=="assistant"||messages.indexOf(m)>0).map(m=>({role:m.role,content:m.content}));
+    setMessages(prev=>[...prev,{role:"user",content:userMsg}]);
+    setThinking(true);
+    try {
+      const reply = await callClaude(financeContext, userMsg, history.slice(-6));
+      setMessages(prev=>[...prev,{role:"assistant",content:reply}]);
+    } catch(e) {
+      setMessages(prev=>[...prev,{role:"assistant",content:"Sorry, something went wrong. Please try again."}]);
+    }
+    setThinking(false);
+  };
+
+  // ── Email: generate draft ──
+  const generateEmail = async () => {
+    if (!emailClient) return;
+    setEmailLoading(true); setEmailDraft(""); setEmailSent(false);
+    const clientObj = clients.find(c=>c.id===emailClient);
+    const clientInvoices = invoices.filter(i=>i.client_id===emailClient);
+    const overdueClient = clientInvoices.filter(i=>i.status!=="paid"&&i.due_date&&new Date(i.due_date)<new Date());
+
+    const intentMap = {
+      chase: `Write a polite but firm payment chase email. The client has ${overdueClient.length} overdue invoice(s) totalling ${money(overdueClient.reduce((s,i)=>s+(parseFloat(i.amount)||0),0),cur)}. Oldest is ${overdueClient[0]?.due_date||"unknown"} due date.`,
+      intro: `Write a professional introductory email to a new client. Freelancer name: ${profile?.name||"the sender"}.`,
+      receipt: `Write a payment receipt / thank you email for recent payment.`,
+      proposal: `Write a project proposal follow-up email.`,
+      reminder: `Write a friendly upcoming payment reminder (invoice not yet overdue).`,
+    };
+
+    const system = `You are an expert email writer for freelancers. Write professional, concise emails in a warm but confident tone. Output ONLY the email body (no subject line, no "Here is the email:" preamble). Use the client name ${clientObj?.name||"Client"} naturally. The freelancer's name is ${profile?.name||""}. ${emailContext ? "Additional context: " + emailContext : ""}`;
+
+    try {
+      const draft = await callClaude(system, intentMap[emailIntent]||intentMap.chase);
+      setEmailDraft(draft);
+    } catch(e) { setEmailDraft("Failed to generate email. Please try again."); }
+    setEmailLoading(false);
+  };
+
+  // ── Email: send via Brevo ──
+  const sendEmail = async () => {
+    const clientObj = clients.find(c=>c.id===emailClient);
+    if (!clientObj?.email || !emailDraft) return;
+    setSendingEmail(true);
+    const subjectMap = { chase:"Following up on outstanding invoice(s)", intro:"Nice to meet you", receipt:"Thank you for your payment", proposal:"Project proposal follow-up", reminder:"Upcoming payment reminder" };
+    try {
+      const sendRes = await fetch(`${SUPABASE_URL_AI}/functions/v1/send-email`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "Authorization":`Bearer ${SUPABASE_ANON}`, "apikey":SUPABASE_ANON },
+        body: JSON.stringify({
+          to_email: clientObj.email,
+          to_name: clientObj.name,
+          from_name: profile?.name||"Ledgr User",
+          subject: subjectMap[emailIntent]||"Message from your freelancer",
+          body: emailDraft,
+        }),
+      });
+      const sendData = await sendRes.json();
+      if (sendData.error) throw new Error(sendData.error);
+      setEmailSent(true);
+    } catch(e) { alert("Failed to send email: " + e.message); }
+    setSendingEmail(false);
+  };
+
+  // ── Statement: analyse ──
+  const analyseStatement = async () => {
+    if (!statementText.trim()) return;
+    setStatementLoading(true); setStatementResult(null);
+    const system = `You are a financial analyst reviewing a freelancer's bank statement. Analyse the transactions and return a JSON object with this exact structure (no markdown, no explanation, just JSON):
+{
+  "summary": "2-3 sentence plain English summary",
+  "totalIn": number,
+  "totalOut": number,
+  "categories": [{"name": string, "amount": number, "count": number}],
+  "insights": ["insight 1", "insight 2", "insight 3", "insight 4"],
+  "flags": ["anything unusual or worth attention"],
+  "currency": "detected currency code e.g. GBP"
+}`;
+    try {
+      const raw = await callClaude(system, `Analyse this bank statement data:\n\n${statementText.slice(0,4000)}`);
+      const clean = raw.replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(clean);
+      setStatementResult(parsed);
+    } catch(e) {
+      setStatementResult({ summary:"Could not parse statement. Try pasting fewer rows or a cleaner CSV format.", totalIn:0, totalOut:0, categories:[], insights:["Make sure your data is formatted clearly — one transaction per line with date, description, amount."], flags:[], currency:cur });
+    }
+    setStatementLoading(false);
+  };
+
+  const subTabs = [{id:"insights",label:"💡 Finance Insights"},{id:"email",label:"✉️ Email Assistant"},{id:"statement",label:"📊 Statement Analysis"}];
+
+  const inputStyle = {width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"};
+
+  return (
+    <div>
+      {/* Sub-tab pills */}
+      <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
+        {subTabs.map(t=>(
+          <button key={t.id} onClick={()=>setSubTab(t.id)} style={{
+            padding:"8px 16px",borderRadius:20,border:`1px solid ${subTab===t.id?C.accent+"44":C.border}`,
+            background:subTab===t.id?"rgba(74,222,128,0.08)":C.card,
+            color:subTab===t.id?C.accent:C.textDim,
+            fontSize:13,fontWeight:subTab===t.id?700:500,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s",
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── INSIGHTS ── */}
+      {subTab==="insights"&&(
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",height:isMobile?500:600}}>
+          {/* Messages */}
+          <div style={{flex:1,overflowY:"auto",padding:"20px 20px 0"}}>
+            {messages.map((m,i)=>(
+              <div key={i} style={{display:"flex",gap:10,marginBottom:16,flexDirection:m.role==="user"?"row-reverse":"row",alignItems:"flex-start"}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:m.role==="user"?"rgba(74,222,128,0.2)":"rgba(96,165,250,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>
+                  {m.role==="user"?"👤":"✦"}
+                </div>
+                <div style={{maxWidth:"80%",background:m.role==="user"?C.surface:C.bg,border:`1px solid ${C.border}`,borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"10px 14px",fontSize:13,color:C.text,lineHeight:1.7,whiteSpace:"pre-wrap"}}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {thinking&&(
+              <div style={{display:"flex",gap:10,marginBottom:16,alignItems:"flex-start"}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:"rgba(96,165,250,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✦</div>
+                <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:"16px 16px 16px 4px",padding:"10px 14px",color:C.muted,fontSize:13}}>Thinking...</div>
+              </div>
+            )}
+          </div>
+
+          {/* Suggested prompts */}
+          {messages.length<=1&&(
+            <div style={{padding:"0 20px 12px",display:"flex",flexWrap:"wrap",gap:8}}>
+              {[
+                "How am I doing financially this month?",
+                "Which clients owe me the most?",
+                "What are my biggest expenses?",
+                overdueInvs.length>0?`I have ${overdueInvs.length} overdue invoices — what should I do?`:"Am I on track to hit my income goal?",
+                "Where am I spending too much?",
+              ].map((s,i)=>(
+                <button key={i} onClick={()=>sendMessage(s)} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.textDim,padding:"6px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent+"66";e.currentTarget.style.color=C.accent;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.textDim;}}
+                >{s}</button>
+              ))}
+            </div>
+          )}
+
+          {/* Input */}
+          <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,display:"flex",gap:8}}>
+            <input
+              value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&sendMessage()}
+              placeholder="Ask anything about your finances..."
+              style={{...inputStyle,flex:1}}
+            />
+            <button onClick={()=>sendMessage()} disabled={!input.trim()||thinking} style={{background:C.accent,border:"none",color:"#060A0F",borderRadius:10,padding:"10px 16px",cursor:(!input.trim()||thinking)?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:(!input.trim()||thinking)?0.5:1,whiteSpace:"nowrap"}}>
+              Send →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── EMAIL ASSISTANT ── */}
+      {subTab==="email"&&(
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16}}>
+          {/* Left — config */}
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,display:"flex",flexDirection:"column",gap:14}}>
+            <h3 style={{margin:0,fontSize:14,fontWeight:700,color:C.text}}>Compose</h3>
+
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",display:"block",marginBottom:6}}>Client</label>
+              <select value={emailClient} onChange={e=>setEmailClient(e.target.value)} style={{...inputStyle}}>
+                <option value="">Select a client…</option>
+                {clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.email?" · "+c.email:""}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",display:"block",marginBottom:6}}>Email Type</label>
+              <select value={emailIntent} onChange={e=>setEmailIntent(e.target.value)} style={{...inputStyle}}>
+                <option value="chase">💸 Chase overdue invoice</option>
+                <option value="reminder">🔔 Payment reminder (upcoming)</option>
+                <option value="receipt">✅ Payment received — thank you</option>
+                <option value="intro">👋 Introduction to new client</option>
+                <option value="proposal">📋 Project proposal follow-up</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",display:"block",marginBottom:6}}>Additional context (optional)</label>
+              <textarea value={emailContext} onChange={e=>setEmailContext(e.target.value)} placeholder="e.g. Invoice #INV-004, £1,200 for branding project, sent 3 weeks ago…" rows={3} style={{...inputStyle,resize:"vertical"}}/>
+            </div>
+
+            <button onClick={generateEmail} disabled={!emailClient||emailLoading} style={{background:C.accent,border:"none",color:"#060A0F",borderRadius:10,padding:"11px",cursor:(!emailClient||emailLoading)?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:(!emailClient||emailLoading)?0.5:1}}>
+              {emailLoading?"Generating…":"✦ Generate Email"}
+            </button>
+          </div>
+
+          {/* Right — draft */}
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,display:"flex",flexDirection:"column",gap:14}}>
+            <h3 style={{margin:0,fontSize:14,fontWeight:700,color:C.text}}>Draft</h3>
+            {!emailDraft&&!emailLoading&&(
+              <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:13,textAlign:"center",padding:20,border:`1px dashed ${C.border}`,borderRadius:10}}>
+                Select a client and email type,<br/>then click Generate.
+              </div>
+            )}
+            {emailLoading&&(
+              <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:13}}>Writing your email…</div>
+            )}
+            {emailDraft&&(
+              <>
+                <textarea value={emailDraft} onChange={e=>setEmailDraft(e.target.value)} rows={12} style={{...inputStyle,flex:1,resize:"vertical",lineHeight:1.7}}/>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={generateEmail} disabled={emailLoading} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,color:C.textDim,borderRadius:10,padding:"10px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                    ↻ Regenerate
+                  </button>
+                  {clients.find(c=>c.id===emailClient)?.email ? (
+                    <button onClick={sendEmail} disabled={sendingEmail||emailSent} style={{flex:2,background:emailSent?"#166534":C.accent,border:"none",color:"#060A0F",borderRadius:10,padding:"10px",cursor:(sendingEmail||emailSent)?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:sendingEmail?0.7:1}}>
+                      {emailSent?"✓ Sent!":sendingEmail?"Sending…":"Send via Brevo →"}
+                    </button>
+                  ) : (
+                    <button onClick={()=>{navigator.clipboard?.writeText(emailDraft);}} style={{flex:2,background:C.accent,border:"none",color:"#060A0F",borderRadius:10,padding:"10px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                      Copy to clipboard
+                    </button>
+                  )}
+                </div>
+                {!clients.find(c=>c.id===emailClient)?.email&&<p style={{fontSize:11,color:C.muted,margin:0}}>Add an email address to this client to send directly.</p>}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── STATEMENT ANALYSIS ── */}
+      {subTab==="statement"&&(
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+            <h3 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:C.text}}>Paste your bank statement</h3>
+            <p style={{color:C.muted,fontSize:12,margin:"0 0 14px",lineHeight:1.6}}>Paste CSV data or copy-paste rows from your online banking. Works with any format — the AI will interpret it.</p>
+            <textarea value={statementText} onChange={e=>setStatementText(e.target.value)} rows={8} placeholder={"Date,Description,Amount\n01/03/2025,Adobe Creative Cloud,-54.99\n02/03/2025,Client payment - Acme Corp,1200.00\n05/03/2025,AWS hosting,-23.40\n..."} style={{...inputStyle,resize:"vertical",lineHeight:1.6,marginBottom:12}}/>
+            <button onClick={analyseStatement} disabled={!statementText.trim()||statementLoading} style={{background:C.accent,border:"none",color:"#060A0F",borderRadius:10,padding:"11px 24px",cursor:(!statementText.trim()||statementLoading)?"not-allowed":"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:(!statementText.trim()||statementLoading)?0.5:1}}>
+              {statementLoading?"Analysing…":"✦ Analyse Statement"}
+            </button>
+          </div>
+
+          {statementResult&&(
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {/* Summary */}
+              <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.accent,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Summary</div>
+                <p style={{fontSize:14,color:C.text,lineHeight:1.75,margin:"0 0 16px"}}>{statementResult.summary}</p>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                  {[
+                    {label:"Money In",value:money(statementResult.totalIn||0,statementResult.currency||cur),color:C.accent},
+                    {label:"Money Out",value:money(statementResult.totalOut||0,statementResult.currency||cur),color:"#F87171"},
+                    {label:"Net",value:money((statementResult.totalIn||0)-(statementResult.totalOut||0),statementResult.currency||cur),color:(statementResult.totalIn||0)>=(statementResult.totalOut||0)?C.accent:"#F87171"},
+                  ].map((s,i)=>(
+                    <div key={i} style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>{s.label}</div>
+                      <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:800,color:s.color}}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Categories */}
+              {statementResult.categories?.length>0&&(
+                <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.accent,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:14}}>Spending by Category</div>
+                  {statementResult.categories.map((cat,i)=>{
+                    const max = Math.max(...statementResult.categories.map(c=>c.amount));
+                    const pct = max>0?Math.round((cat.amount/max)*100):0;
+                    return(
+                      <div key={i} style={{marginBottom:10}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                          <span style={{fontSize:13,fontWeight:500,color:C.text}}>{cat.name}</span>
+                          <span style={{fontSize:13,color:C.muted}}>{money(cat.amount,statementResult.currency||cur)} · {cat.count} txn{cat.count!==1?"s":""}</span>
+                        </div>
+                        <div style={{height:4,background:C.surface,borderRadius:4,overflow:"hidden"}}>
+                          <div style={{width:`${pct}%`,height:"100%",background:C.accent,borderRadius:4,transition:"width 0.6s ease"}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Insights + Flags */}
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+                {statementResult.insights?.length>0&&(
+                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
+                    <div style={{fontSize:11,fontWeight:700,color:C.accent,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Insights</div>
+                    {statementResult.insights.map((ins,i)=>(
+                      <div key={i} style={{display:"flex",gap:10,marginBottom:10,alignItems:"flex-start"}}>
+                        <span style={{color:C.accent,fontSize:12,marginTop:1,flexShrink:0}}>→</span>
+                        <span style={{fontSize:13,color:C.textDim,lineHeight:1.6}}>{ins}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {statementResult.flags?.length>0&&(
+                  <div style={{background:C.card,border:`1px solid #F59E0B33`,borderRadius:16,padding:20}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#F59E0B",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}}>Worth Noting</div>
+                    {statementResult.flags.map((f,i)=>(
+                      <div key={i} style={{display:"flex",gap:10,marginBottom:10,alignItems:"flex-start"}}>
+                        <span style={{color:"#F59E0B",fontSize:12,marginTop:1,flexShrink:0}}>⚠</span>
+                        <span style={{fontSize:13,color:C.textDim,lineHeight:1.6}}>{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Paywall Screen ────────────────────────────────────────────────────────────
 function PaywallScreen({ session, onSignOut }) {
   const [loading, setLoading] = useState(false);
@@ -1499,7 +1868,7 @@ ${businessName}`
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"},{id:"ai",label:"✦ AI"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",accounts:"⬢",bank:"⬡",charts:"◭"};
@@ -2575,6 +2944,34 @@ ${businessName}`
               })()}
             </div>
           )}
+
+              {tab==="ai"&&(()=>{
+                const now = new Date();
+                const thisMonth = now.toISOString().slice(0,7);
+                const mthInvoices = invoices.filter(inv=>inv.date?.startsWith(thisMonth));
+                const overdueInvs = invoices.filter(inv=>inv.status!=="paid"&&inv.due_date&&new Date(inv.due_date)<now);
+                const mthExpenses = expenses.filter(e=>e.date?.startsWith(thisMonth));
+                const totalInvoiced = mthInvoices.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+                const totalPaid = mthInvoices.filter(i=>i.status==="paid").reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+                const totalExpenses = mthExpenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+                const expCats = mthExpenses.reduce((acc,e)=>{acc[e.category]=(acc[e.category]||0)+(parseFloat(e.amount)||0);return acc;},{});
+                const topCats = Object.entries(expCats).sort((a,b)=>b[1]-a[1]).slice(0,5);
+                const clientBalances = clients.map(c=>({name:c.name,outstanding:invoices.filter(i=>i.client_id===c.id&&i.status!=="paid").reduce((s,i)=>s+(parseFloat(i.amount)||0),0)})).filter(c=>c.outstanding>0).sort((a,b)=>b.outstanding-a.outstanding);
+                const cur = profile?.currency||"USD";
+                const financeContext = `You are an AI finance assistant inside Ledgr, a freelance finance tracker. You have access to the user's real financial data. Answer helpfully and concisely in plain English. Use currency ${cur} unless specified.\n\n=== THIS MONTH (${now.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}) ===\nInvoiced: ${money(totalInvoiced,cur)} | Paid: ${money(totalPaid,cur)} | Unpaid: ${money(totalInvoiced-totalPaid,cur)} | Expenses: ${money(totalExpenses,cur)} | Net: ${money(totalPaid-totalExpenses,cur)}\n\n=== OVERDUE INVOICES (${overdueInvs.length}) ===\n${overdueInvs.slice(0,10).map(i=>`${i.client||"Unknown"}: ${money(parseFloat(i.amount)||0,cur)} — ${Math.floor((now-new Date(i.due_date))/86400000)} days overdue`).join("\n")||"None"}\n\n=== TOP EXPENSE CATEGORIES ===\n${topCats.map(([cat,amt])=>`${cat}: ${money(amt,cur)}`).join("\n")||"No expenses"}\n\n=== CLIENTS WITH OUTSTANDING BALANCES ===\n${clientBalances.slice(0,8).map(c=>`${c.name}: ${money(c.outstanding,cur)}`).join("\n")||"All up to date"}\n\n=== RECENT INVOICES ===\n${invoices.slice(0,15).map(i=>`${i.client||"?"}: ${money(parseFloat(i.amount)||0,cur)} | ${i.status} | due ${i.due_date||"n/a"} | ${i.description||""}`).join("\n")}`;
+                return (
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:28}}>
+                      <div style={{flex:1}}>
+                        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>AI Assistant</h1>
+                        <p style={{color:C.muted,fontSize:13,margin:0}}>Powered by Claude · Your data stays private</p>
+                      </div>
+                      <div style={{background:"rgba(74,222,128,0.1)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700,color:C.accent,letterSpacing:"0.06em"}}>BETA</div>
+                    </div>
+                    <AITabs financeContext={financeContext} invoices={invoices} clients={clients} expenses={expenses} profile={profile} session={session} money={money} cur={cur} C={C} isMobile={isMobile} overdueInvs={overdueInvs}/>
+                  </div>
+                );
+              })()}
         </div>
       </div>
 
