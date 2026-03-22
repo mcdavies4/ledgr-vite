@@ -1822,11 +1822,13 @@ ${businessName}`
   const isActive = () => {
     if (!profile) return true; // still loading
     const status = profile.subscription_status;
-    if (status === "active" || status === "past_due") return true; // give grace for past_due
+    if (status === "active" || status === "past_due") return true;
+    if (status === "expired" || status === "canceled" || status === "unpaid") return false;
     if (status === "trialing" || !status) {
-      return profile.trial_ends_at ? daysUntil(profile.trial_ends_at) > 0 : true;
+      if (!profile.trial_ends_at) return false;
+      return new Date(profile.trial_ends_at) > new Date();
     }
-    return false; // canceled, unpaid, etc
+    return false;
   };
 
   const fInvoices = filter==="all"?invoices:invoices.filter(i=>i.type===filter);
