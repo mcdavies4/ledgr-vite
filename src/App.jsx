@@ -1342,6 +1342,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const close = () => setModal(null);
   const [newInv, setNewInv] = useState({ client:"", client_id:null, client_email:"", amount:"", due_date:"", type:"business", description:"", status:"pending", recurring:false, recurring_frequency:"monthly" });
   const [newExp, setNewExp] = useState({ name:"", amount:"", category:"", date:"", type:"business" });
@@ -1981,6 +1982,7 @@ ${businessName}`
                       { id:"invoice", label:"Create your first invoice", desc:"Send a professional invoice in seconds.", done:invoices.length>0, action:()=>setModal("invoice"), cta:"Create invoice" },
                       { id:"account", label:"Connect a payment account", desc:"See all your money in one place.", done:connectedAccounts.length>0, action:()=>setTab("accounts"), cta:"Connect account" },
                     ];
+                    steps.sort((a,b)=>a.done===b.done?0:a.done?1:-1); // incomplete first
                     const doneCount = steps.filter(s=>s.done).length;
                     if(doneCount===steps.length) return null; // fully onboarded, hide
                     const pct = Math.round((doneCount/steps.length)*100);
@@ -2004,7 +2006,7 @@ ${businessName}`
                                 <div style={{fontSize:13,fontWeight:s.done?500:700,textDecoration:s.done?"line-through":"none",color:s.done?C.muted:C.text}}>{s.label}</div>
                                 {!s.done&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{s.desc}</div>}
                               </div>
-                              {!s.done&&<button onClick={s.action} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,color:C.accent,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{s.cta} →</button>}
+                              {!s.done&&<button onClick={s.action} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,borderRadius:8,padding:isMobile?"5px 8px":"6px 12px",fontSize:isMobile?11:12,fontWeight:700,color:C.accent,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>{s.cta} →</button>}
                             </div>
                           ))}
                         </div>
@@ -2982,13 +2984,47 @@ ${businessName}`
       </div>
 
       {isMobile&&(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200}}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",border:"none",background:"transparent",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,fontFamily:"'DM Sans',sans-serif",position:"relative",transition:"color 0.15s"}}>
-              <span style={{fontSize:9,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase"}}>{t.label}</span>
-              {t.id==="alerts"&&upcoming.length>0&&<span style={{position:"absolute",top:4,right:"50%",marginRight:-20,background:C.warning,color:"#000",fontSize:8,fontWeight:700,padding:"1px 4px",borderRadius:8}}>{upcoming.length}</span>}
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,zIndex:200,paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
+          {/* Primary nav — 5 key tabs always visible */}
+          <div style={{display:"flex"}}>
+            {[
+              {id:"dashboard",label:"Home",icon:"◈"},
+              {id:"invoices",label:"Invoices",icon:"◎"},
+              {id:"expenses",label:"Expenses",icon:"◉"},
+              {id:"clients",label:"Clients",icon:"◫"},
+              {id:"ai",label:"✦ AI",icon:null},
+            ].map(t=>(
+              <button key={t.id} onClick={()=>{setTab(t.id);setMobileMoreOpen&&setMobileMoreOpen(false);}} style={{flex:1,padding:"10px 4px 8px",border:"none",background:"transparent",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontFamily:"'DM Sans',sans-serif",transition:"color 0.15s",position:"relative"}}>
+                {t.icon&&<span style={{fontSize:14,lineHeight:1}}>{t.icon}</span>}
+                <span style={{fontSize:9,fontWeight:tab===t.id?700:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{t.label}</span>
+                {t.id==="alerts"&&upcoming.length>0&&<span style={{position:"absolute",top:4,right:"50%",marginRight:-16,background:C.warning,color:"#000",fontSize:7,fontWeight:700,padding:"1px 4px",borderRadius:8}}>{upcoming.length}</span>}
+                {tab===t.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
+              </button>
+            ))}
+            {/* More button */}
+            <button onClick={()=>setMobileMoreOpen(o=>!o)} style={{flex:1,padding:"10px 4px 8px",border:"none",background:"transparent",color:["alerts","accounts","bank","charts","tax","vat"].includes(tab)?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontFamily:"'DM Sans',sans-serif",transition:"color 0.15s"}}>
+              <span style={{fontSize:14,lineHeight:1}}>⋯</span>
+              <span style={{fontSize:9,fontWeight:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>More</span>
             </button>
-          ))}
+          </div>
+          {/* More drawer */}
+          {mobileMoreOpen&&(
+            <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,background:C.surface}}>
+              {[
+                {id:"alerts",label:"Alerts"},
+                {id:"accounts",label:"Accounts"},
+                {id:"bank",label:"Bank"},
+                {id:"charts",label:"Charts"},
+                {id:"tax",label:"Tax"},
+                {id:"vat",label:"VAT"},
+              ].map(t=>(
+                <button key={t.id} onClick={()=>{setTab(t.id);setMobileMoreOpen(false);}} style={{padding:"10px 8px",border:`1px solid ${tab===t.id?C.accent+"44":C.border}`,borderRadius:10,background:tab===t.id?"rgba(74,222,128,0.08)":C.card,color:tab===t.id?C.accent:C.textDim,cursor:"pointer",fontSize:11,fontWeight:tab===t.id?700:500,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>
+                  {t.label}
+                  {t.id==="alerts"&&upcoming.length>0&&<span style={{marginLeft:4,background:C.warning,color:"#000",fontSize:8,fontWeight:700,padding:"1px 4px",borderRadius:6}}>{upcoming.length}</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
