@@ -482,7 +482,7 @@ function AITabs({ financeContext, invoices, clients, expenses, profile, session,
               <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20}}>
                 <div style={{fontSize:11,fontWeight:700,color:C.accent,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:10}}>Summary</div>
                 <p style={{fontSize:14,color:C.text,lineHeight:1.75,margin:"0 0 16px"}}>{statementResult.summary}</p>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
                   {[
                     {label:"Money In",value:money(statementResult.totalIn||0,statementResult.currency||cur),color:C.accent},
                     {label:"Money Out",value:money(statementResult.totalOut||0,statementResult.currency||cur),color:"#F87171"},
@@ -598,7 +598,7 @@ function PaywallScreen({ session, onSignOut }) {
         </div>
 
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:20, overflow:"hidden", marginBottom:16 }}>
-          <div style={{ background:C.accentDim, borderBottom:`1px solid ${C.border}`, padding:"20px 32px", textAlign:"center" }}>
+          <div style={{ background:C.accentDim, borderBottom:`1px solid ${C.border}`, padding:isMobile?"16px 20px":"20px 32px", textAlign:"center" }}>
             <div style={{ color:C.accent, fontSize:40, fontWeight:700, fontFamily:"'Playfair Display',serif", lineHeight:1 }}>
               {plan === "annual" ? "$120" : "$15"}
             </div>
@@ -607,7 +607,7 @@ function PaywallScreen({ session, onSignOut }) {
             </div>
           </div>
 
-          <div style={{ padding:"24px 32px" }}>
+          <div style={{ padding:isMobile?"16px 20px":"24px 32px" }}>
             {[
               "Unlimited invoices & PDF export",
               "Stripe payment links (money direct to you)",
@@ -625,7 +625,7 @@ function PaywallScreen({ session, onSignOut }) {
             ))}
           </div>
 
-          <div style={{ padding:"0 32px 28px" }}>
+          <div style={{ padding:isMobile?"0 20px 20px":"0 32px 28px" }}>
             <Btn onClick={handleSubscribe} disabled={loading} style={{ width:"100%", fontSize:15, padding:"14px" }}>
               {loading ? "Redirecting to Stripe..." : plan === "annual" ? "Subscribe — $120/year →" : "Subscribe — $15/month →"}
             </Btn>
@@ -1244,7 +1244,7 @@ function AuthScreen({ initialMode="login" }) {
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
 function generatePDF(inv, profile={}) {
-  const num = inv.invoice_number ? `INV-${inv.invoice_number}` : `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
+  const num = inv.invoice_number ? `INV-${String(inv.invoice_number).padStart(3,"0")}` : `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
   const currCode = inv.currency || profile.currency || "USD";
   const m = (n) => new Intl.NumberFormat(CURRENCIES.find(c=>c.code===currCode)?.locale||"en-US",{style:"currency",currency:currCode}).format(n);
   const d = (v) => v ? new Date(v).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "N/A";
@@ -1455,14 +1455,18 @@ export default function App() {
     const vat_rate = newInv.vat_rate ? parseFloat(newInv.vat_rate) : 0;
     const vat_amount = parseFloat(((subtotal * vat_rate) / 100).toFixed(2));
     const total_amount = parseFloat((subtotal + vat_amount).toFixed(2));
+    // Get next sequential invoice number for this user
+    const { data: seqData } = await supabase.rpc("get_next_invoice_number", { p_user_id: session.user.id });
+    const invoice_number = seqData || 1;
     const row = {
       ...newInv,
-      amount: total_amount,       // amount = total inc VAT (what client pays)
-      subtotal: subtotal,         // subtotal excl VAT
+      amount: total_amount,
+      subtotal: subtotal,
       vat_rate: vat_rate || null,
       vat_amount: vat_amount || null,
       user_id: session.user.id,
       recurring_next_date,
+      invoice_number,
     };
     const { data } = await supabase.from("invoices").insert(row).select().single();
     if (data) setInvoices(p=>[data,...p]);
@@ -1554,7 +1558,7 @@ ${businessName}`
           amount, due_date: dueDateStr,
           description: inv.description || inv.name,
           payment_link: inv.payment_link,
-          invoice_number: inv.invoice_number || inv.id.slice(0,8).toUpperCase(),
+          invoice_number: inv.invoice_number ? `INV-${String(inv.invoice_number).padStart(3,"0")}` : `INV-${inv.id.slice(0,8).toUpperCase()}`,
           reply_to: profile?.email,
         }),
       });
@@ -2011,7 +2015,7 @@ ${businessName}`
                     {stats.map((s,i)=>(
                       <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px",position:"relative",overflow:"hidden",transition:"border-color 0.2s"}}>
                         <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${s.color}44,transparent)`}}/>
-                        <div style={{color:C.muted,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10}}>{s.label}</div>
+                        <div style={{color:C.muted,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:10,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.label}</div>
                         <div style={{color:s.color,fontSize:isMobile?14:18,fontWeight:800,fontFamily:"'Playfair Display',serif",lineHeight:1}}>{s.value}</div>
                       </div>
                     ))}
@@ -2055,7 +2059,7 @@ ${businessName}`
                       <div key={inv.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 20px",transition:"border-color 0.2s,transform 0.15s"}}
                         onMouseEnter={e=>{e.currentTarget.style.borderColor="#2d3548";e.currentTarget.style.transform="translateY(-1px)";}}
                         onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)";}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,gap:8}}>
                           <div>
                             <div style={{fontSize:15,fontWeight:700,marginBottom:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                               {inv.client}
@@ -2068,12 +2072,12 @@ ${businessName}`
                             </div>
                             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Badge type={inv.type}/><StatusPill status={inv.status}/></div>
                           </div>
-                          <div style={{fontSize:20,fontWeight:800,fontFamily:"'Playfair Display',serif",textAlign:"right"}}>
+                          <div style={{fontSize:isMobile?15:20,fontWeight:800,fontFamily:"'Playfair Display',serif",textAlign:"right",flexShrink:0}}>
                             {money(inv.amount, inv.currency||profile?.currency)}
                           </div>
                         </div>
                         <div style={{fontSize:12,color:C.muted,marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${C.border}`}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
-                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                           <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 14px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 14px",fontSize:12,flex:1}}>Mark Paid</Btn>}
                           {inv.status!=="paid"&&!profile?.stripe_account_id&&(
