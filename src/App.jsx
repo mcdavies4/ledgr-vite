@@ -1036,23 +1036,45 @@ const SUPABASE_URL = "https://phjybvphmlzghdebonzy.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoanlidnBobWx6Z2hkZWJvbnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTI2MDIsImV4cCI6MjA4ODE2ODYwMn0.6r7C6aQPn0YTjmDjRkP8fVd6cQhXJ_L1jBYqsu2qRWM";
 const ADMIN_EMAIL = "azubuikedavies@gmail.com";
 
-function exportUsersCsv(users, label) {
-  const rows = [
-    ["Email", "Name", "Status", "Trial Ends", "Joined", "Invoices", "Expenses"],
-    ...users.map(u => [
-      u.email,
-      u.name || "",
-      u.subscription_status || "trialing",
-      u.trial_ends_at ? new Date(u.trial_ends_at).toLocaleDateString("en-GB") : "",
-      u.created_at ? new Date(u.created_at).toLocaleDateString("en-GB") : "",
-      u.invoices || 0,
-      u.expenses || 0,
-    ])
-  ];
+function exportUsersCsv(users, label, brevoFormat=false) {
+  let rows;
+  if (brevoFormat) {
+    // Brevo import format: EMAIL, FIRSTNAME, LASTNAME + custom attrs
+    rows = [
+      ["EMAIL", "FIRSTNAME", "LASTNAME", "LEDGR_STATUS", "LEDGR_TRIAL_ENDS", "LEDGR_JOINED", "LEDGR_INVOICES", "LEDGR_CURRENCY"],
+      ...users.map(u => {
+        const nameParts = (u.name || "").split(" ");
+        return [
+          u.email,
+          nameParts[0] || "",
+          nameParts.slice(1).join(" ") || "",
+          u.subscription_status || "trialing",
+          u.trial_ends_at ? new Date(u.trial_ends_at).toLocaleDateString("en-GB") : "",
+          u.created_at ? new Date(u.created_at).toLocaleDateString("en-GB") : "",
+          u.invoices || 0,
+          u.currency || "USD",
+        ];
+      })
+    ];
+  } else {
+    rows = [
+      ["Email", "Name", "Status", "Trial Ends", "Joined", "Invoices", "Expenses", "Currency"],
+      ...users.map(u => [
+        u.email,
+        u.name || "",
+        u.subscription_status || "trialing",
+        u.trial_ends_at ? new Date(u.trial_ends_at).toLocaleDateString("en-GB") : "",
+        u.created_at ? new Date(u.created_at).toLocaleDateString("en-GB") : "",
+        u.invoices || 0,
+        u.expenses || 0,
+        u.currency || "USD",
+      ])
+    ];
+  }
   const csv = rows.map(r => r.map(v => `"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const a = Object.assign(document.createElement("a"), {
     href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
-    download: `ledgr-users-${label}-${new Date().toISOString().slice(0,10)}.csv`,
+    download: `ledgr-users-${label}${brevoFormat?"-brevo":""}-${new Date().toISOString().slice(0,10)}.csv`,
   });
   a.click();
 }
@@ -1101,6 +1123,7 @@ function AdminDashboard({ session, onExit }) {
         <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
           {data&&(
             <>
+              {/* Standard CSV exports */}
               <button onClick={()=>exportUsersCsv(data.users,"all")} style={{background:"#0d2018",border:"1px solid #4ADE8033",color:"#4ADE80",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
                 ↓ All Users
               </button>
@@ -1109,6 +1132,13 @@ function AdminDashboard({ session, onExit }) {
               </button>
               <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="active"),"active")} style={{background:"#0a2018",border:"1px solid #4ADE8033",color:"#4ADE80",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
                 ↓ Paid Users
+              </button>
+              {/* Brevo-ready exports */}
+              <button onClick={()=>exportUsersCsv(data.users,"all",true)} style={{background:"#1a0a2e",border:"1px solid #A78BFA44",color:"#A78BFA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Brevo-formatted CSV — import directly into Brevo contacts">
+                ↓ Brevo: All
+              </button>
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="trialing"||!u.subscription_status),"trial",true)} style={{background:"#1a0a2e",border:"1px solid #A78BFA44",color:"#A78BFA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Brevo-formatted CSV of trial users only">
+                ↓ Brevo: Trial
               </button>
             </>
           )}
