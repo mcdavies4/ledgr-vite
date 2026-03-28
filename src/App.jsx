@@ -1036,6 +1036,27 @@ const SUPABASE_URL = "https://phjybvphmlzghdebonzy.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBoanlidnBobWx6Z2hkZWJvbnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTI2MDIsImV4cCI6MjA4ODE2ODYwMn0.6r7C6aQPn0YTjmDjRkP8fVd6cQhXJ_L1jBYqsu2qRWM";
 const ADMIN_EMAIL = "azubuikedavies@gmail.com";
 
+function exportUsersCsv(users, label) {
+  const rows = [
+    ["Email", "Name", "Status", "Trial Ends", "Joined", "Invoices", "Expenses"],
+    ...users.map(u => [
+      u.email,
+      u.name || "",
+      u.subscription_status || "trialing",
+      u.trial_ends_at ? new Date(u.trial_ends_at).toLocaleDateString("en-GB") : "",
+      u.created_at ? new Date(u.created_at).toLocaleDateString("en-GB") : "",
+      u.invoices || 0,
+      u.expenses || 0,
+    ])
+  ];
+  const csv = rows.map(r => r.map(v => `"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
+    download: `ledgr-users-${label}-${new Date().toISOString().slice(0,10)}.csv`,
+  });
+  a.click();
+}
+
 function AdminDashboard({ session, onExit }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1077,9 +1098,24 @@ function AdminDashboard({ session, onExit }) {
           <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:800}}>Ledgr Admin</div>
           <div style={{fontSize:11,color:"#4B5563"}}>Signed in as {session.user.email}</div>
         </div>
-        <button onClick={onExit} style={{marginLeft:"auto",background:"#141A22",border:"1px solid #1E2535",color:"#8B95A8",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
-          Back to App
-        </button>
+        <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
+          {data&&(
+            <>
+              <button onClick={()=>exportUsersCsv(data.users,"all")} style={{background:"#0d2018",border:"1px solid #4ADE8033",color:"#4ADE80",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                ↓ All Users
+              </button>
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="trialing"||!u.subscription_status),"trial")} style={{background:"#1f1508",border:"1px solid #FBBF2433",color:"#FBBF24",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                ↓ Trial Users
+              </button>
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="active"),"active")} style={{background:"#0a2018",border:"1px solid #4ADE8033",color:"#4ADE80",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                ↓ Paid Users
+              </button>
+            </>
+          )}
+          <button onClick={onExit} style={{background:"#141A22",border:"1px solid #1E2535",color:"#8B95A8",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+            Back to App
+          </button>
+        </div>
       </div>
 
       <div style={{maxWidth:1100,margin:"0 auto",padding:"32px 24px"}}>
@@ -1304,6 +1340,93 @@ function exportCSV(type, invoices, expenses) {
   else { rows=[["Name","Amount","Category","Date","Type"],...expenses.map(e=>[e.name,e.amount,e.category,e.date,e.type])]; filename="ledgr-expenses.csv"; }
   const csv=rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(new Blob([csv],{type:"text/csv"})),download:filename}); a.click();
+}
+
+function exportAccountantPack(invoices, expenses, profile) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const cur = profile?.currency || "USD";
+  const fmt = (n) => new Intl.NumberFormat("en-GB", { style:"currency", currency:cur, minimumFractionDigits:2 }).format(n || 0);
+
+  // Income summary
+  const paidInvs = invoices.filter(i => i.status === "paid");
+  const unpaidInvs = invoices.filter(i => i.status !== "paid");
+  const totalIncome = paidInvs.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+  const totalUnpaid = unpaidInvs.reduce((s,i) => s + (parseFloat(i.amount)||0), 0);
+  const totalExpenses = expenses.reduce((s,e) => s + (parseFloat(e.amount)||0), 0);
+  const netProfit = totalIncome - totalExpenses;
+
+  // Expense categories
+  const catMap = {};
+  expenses.forEach(e => { catMap[e.category] = (catMap[e.category]||0) + (parseFloat(e.amount)||0); });
+  const catRows = Object.entries(catMap).sort((a,b) => b[1]-a[1]);
+
+  // Build CSV with multiple sections
+  const sections = [];
+
+  sections.push(["LEDGR ACCOUNTANT PACK", "", "", "", ""]);
+  sections.push([`Generated: ${now.toLocaleDateString("en-GB")}`, "", "", "", ""]);
+  sections.push([`Freelancer: ${profile?.name || ""}`, "", "", "", ""]);
+  sections.push([`VAT Number: ${profile?.vat_number || "N/A"}`, "", "", "", ""]);
+  sections.push(["", "", "", "", ""]);
+
+  sections.push(["=== INCOME SUMMARY ===", "", "", "", ""]);
+  sections.push(["Total Invoiced", "", "", fmt(paidInvs.reduce((s,i)=>s+(parseFloat(i.amount)||0),0) + totalUnpaid), ""]);
+  sections.push(["Total Collected", "", "", fmt(totalIncome), ""]);
+  sections.push(["Total Outstanding", "", "", fmt(totalUnpaid), ""]);
+  sections.push(["Total Expenses", "", "", fmt(totalExpenses), ""]);
+  sections.push(["Net Profit", "", "", fmt(netProfit), ""]);
+  sections.push(["", "", "", "", ""]);
+
+  sections.push(["=== ALL INVOICES ===", "", "", "", ""]);
+  sections.push(["Invoice #", "Client", "Description", "Amount", "Status", "Due Date", "VAT Amount"]);
+  invoices.forEach(i => {
+    const num = i.invoice_number ? `INV-${String(i.invoice_number).padStart(3,"0")}` : i.id.slice(-8).toUpperCase();
+    sections.push([num, i.client||"", i.description||"", fmt(i.amount), i.status, i.due_date||"", i.vat_amount ? fmt(i.vat_amount) : ""]);
+  });
+  sections.push(["", "", "", "", ""]);
+
+  sections.push(["=== ALL EXPENSES ===", "", "", "", ""]);
+  sections.push(["Date", "Name", "Category", "Amount", "Type", "VAT Amount"]);
+  [...expenses].sort((a,b) => new Date(a.date) - new Date(b.date)).forEach(e => {
+    sections.push([e.date||"", e.name||"", e.category||"", fmt(e.amount), e.type||"", e.vat_amount ? fmt(e.vat_amount) : ""]);
+  });
+  sections.push(["", "", "", "", ""]);
+
+  sections.push(["=== EXPENSES BY CATEGORY ===", "", "", "", ""]);
+  sections.push(["Category", "Total", "", "", ""]);
+  catRows.forEach(([cat, amt]) => sections.push([cat, fmt(amt), "", "", ""]));
+
+  const csv = sections.map(r => r.map(v => `"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("
+");
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([csv], {type:"text/csv"})),
+    download: `ledgr-accountant-pack-${year}.csv`
+  });
+  a.click();
+}
+
+function getClientHealth(clientInvoices) {
+  if (!clientInvoices || clientInvoices.length === 0) return { score: null, label: "New", color: "#6B7A8D" };
+  const now = new Date();
+  const paid = clientInvoices.filter(i => i.status === "paid");
+  const overdue = clientInvoices.filter(i => i.status !== "paid" && i.due_date && new Date(i.due_date) < now);
+  const total = clientInvoices.length;
+  const payRate = paid.length / total;
+  const avgDaysOverdue = overdue.length > 0
+    ? overdue.reduce((s,i) => s + Math.floor((now - new Date(i.due_date)) / 86400000), 0) / overdue.length
+    : 0;
+  let score = Math.round(payRate * 70);
+  if (avgDaysOverdue === 0) score += 30;
+  else if (avgDaysOverdue < 7) score += 20;
+  else if (avgDaysOverdue < 14) score += 10;
+  else if (avgDaysOverdue < 30) score += 5;
+  score = Math.max(0, Math.min(100, score));
+  if (score >= 85) return { score, label: "Excellent", color: "#4ADE80" };
+  if (score >= 65) return { score, label: "Good", color: "#86efac" };
+  if (score >= 45) return { score, label: "Average", color: "#FBBF24" };
+  if (score >= 25) return { score, label: "At Risk", color: "#F97316" };
+  return { score, label: "Poor", color: "#F87171" };
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -2050,9 +2173,10 @@ ${businessName}`
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12}}>
                     <div><h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Invoices</h1><p style={{color:C.muted,fontSize:13,margin:0}}>{fInvoices.length} invoices</p></div>
-                    <div style={{display:"flex",gap:8,flexShrink:0}}>
+                    <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
                       <Btn onClick={()=>setModal("invoice")} style={{padding:"10px 14px",fontSize:13}}>+ New</Btn>
                       <Btn variant="secondary" onClick={()=>exportCSV("invoices",invoices,expenses)} style={{padding:"10px 14px",fontSize:13}}>CSV</Btn>
+                      <Btn variant="secondary" onClick={()=>exportAccountantPack(invoices,expenses,profile)} style={{padding:"10px 14px",fontSize:13,color:"#A78BFA",border:"1px solid #A78BFA44"}} title="Download full accountant-ready CSV pack">📦 Pack</Btn>
                     </div>
                   </div>
                   {fInvoices.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:C.muted,background:C.card,borderRadius:16,border:`1px solid ${C.border}`}}>No invoices yet.</div>}
@@ -2101,6 +2225,21 @@ ${businessName}`
                           {inv.status!=="paid"&&!inv.client_email&&(
                             <Btn variant="secondary" onClick={()=>setModal("add-client-email-"+inv.id)} style={{padding:"8px 14px",fontSize:12,color:C.muted,border:`1px solid ${C.border}`}}>
                               🔔
+                            </Btn>
+                          )}
+                          {inv.status!=="paid"&&inv.due_date&&new Date(inv.due_date)<new Date()&&(
+                            <Btn variant="secondary" onClick={()=>{
+                              const daysLate = Math.floor((new Date()-new Date(inv.due_date))/86400000);
+                              const feeRate = 0.02; // 2% late fee
+                              const lateFee = parseFloat(((parseFloat(inv.amount)||0)*feeRate).toFixed(2));
+                              const newAmount = parseFloat(((parseFloat(inv.amount)||0)+lateFee).toFixed(2));
+                              if(window.confirm(`Add 2% late fee of ${new Intl.NumberFormat("en-GB",{style:"currency",currency:inv.currency||profile?.currency||"USD"}).format(lateFee)}?\n\nInvoice total: ${new Intl.NumberFormat("en-GB",{style:"currency",currency:inv.currency||profile?.currency||"USD"}).format(inv.amount)} → ${new Intl.NumberFormat("en-GB",{style:"currency",currency:inv.currency||profile?.currency||"USD"}).format(newAmount)}\n(${daysLate} days overdue)`)){
+                                supabase.from("invoices").update({amount:newAmount,description:(inv.description||"")+" + 2% late fee"}).eq("id",inv.id).then(()=>{
+                                  setInvoices(p=>p.map(x=>x.id===inv.id?{...x,amount:newAmount,description:(inv.description||"")+" + 2% late fee"}:x));
+                                });
+                              }
+                            }} style={{padding:"8px 12px",fontSize:12,color:"#FBBF24",border:"1px solid #FBBF2444"}} title="Add 2% late fee to this overdue invoice">
+                              +Fee
                             </Btn>
                           )}
                           <Btn variant="danger" onClick={()=>delInvoice(inv.id)} style={{padding:"8px 12px",fontSize:12}}>Delete</Btn>
@@ -2195,19 +2334,31 @@ ${businessName}`
                           const cliInvs=invoices.filter(i=>i.client_id===cli.id||i.client===cli.name);
                           const totalBilled=cliInvs.reduce((s,i)=>s+i.amount,0);
                           const totalPaid=cliInvs.filter(i=>i.status==="paid").reduce((s,i)=>s+i.amount,0);
+                          const health=getClientHealth(cliInvs);
                           return(
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                              <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
-                                <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Total Billed</div>
-                                <div style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"'Playfair Display',serif"}}>{money(totalBilled,profile?.currency)}</div>
-                              </div>
-                              <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
-                                <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Collected</div>
-                                <div style={{fontSize:18,fontWeight:700,color:C.accent,fontFamily:"'Playfair Display',serif"}}>{money(totalPaid,profile?.currency)}</div>
-                              </div>
-                              <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
-                                <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Invoices</div>
-                                <div style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"'Playfair Display',serif"}}>{cliInvs.length}</div>
+                            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                              {cliInvs.length>0&&(
+                                <div style={{background:`${health.color}11`,border:`1px solid ${health.color}33`,borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                  <div>
+                                    <div style={{fontSize:10,fontWeight:700,color:health.color,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Client Health Score</div>
+                                    <div style={{fontSize:13,color:health.color,fontWeight:600}}>{health.label} — pays {Math.round((cliInvs.filter(i=>i.status==="paid").length/cliInvs.length)*100)}% of invoices on time</div>
+                                  </div>
+                                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:32,fontWeight:900,color:health.color}}>{health.score}</div>
+                                </div>
+                              )}
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                                <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                                  <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Total Billed</div>
+                                  <div style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"'Playfair Display',serif"}}>{money(totalBilled,profile?.currency)}</div>
+                                </div>
+                                <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                                  <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Collected</div>
+                                  <div style={{fontSize:18,fontWeight:700,color:C.accent,fontFamily:"'Playfair Display',serif"}}>{money(totalPaid,profile?.currency)}</div>
+                                </div>
+                                <div style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                                  <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>Invoices</div>
+                                  <div style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"'Playfair Display',serif"}}>{cliInvs.length}</div>
+                                </div>
                               </div>
                             </div>
                           );
@@ -2270,11 +2421,16 @@ ${businessName}`
                                   <div style={{fontSize:15,fontWeight:700,marginBottom:2}}>{c.name}</div>
                                   <div style={{fontSize:12,color:C.muted}}>{c.company||c.email||"No details added"}</div>
                                 </div>
-                                <div style={{textAlign:"right",flexShrink:0}}>
-                                  <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{money(totalBilled,profile?.currency)}</div>
-                                  {unpaid>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#3a2d1a",color:C.warning}}>{unpaid} unpaid</span>}
-                                  {unpaid===0&&cliInvs.length>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#1a3d2b",color:C.accent}}>All paid</span>}
-                                </div>
+                                {(()=>{
+                                  const health=getClientHealth(cliInvs);
+                                  return(
+                                    <div style={{textAlign:"right",flexShrink:0}}>
+                                      <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{money(totalBilled,profile?.currency)}</div>
+                                      {cliInvs.length>0&&<span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:health.color+"22",color:health.color,border:`1px solid ${health.color}44`}}>{health.label}</span>}
+                                      {unpaid>0&&<span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:20,background:"#3a2d1a",color:C.warning,marginLeft:4}}>{unpaid} unpaid</span>}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                           );
