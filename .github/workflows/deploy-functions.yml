@@ -1,0 +1,43 @@
+name: Deploy Supabase Edge Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/functions/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy all edge functions
+        run: |
+          supabase functions deploy create-checkout
+          supabase functions deploy stripe-webhook
+          supabase functions deploy send-email
+          supabase functions deploy send-onboarding-email
+          supabase functions deploy send-weekly-digest
+          supabase functions deploy stripe-connect-onboard
+          supabase functions deploy stripe-connect-callback
+          supabase functions deploy connect-wise
+          supabase functions deploy connect-revolut
+          supabase functions deploy connect-flutterwave
+          supabase functions deploy connect-paystack
+          supabase functions deploy connect-paypal
+          supabase functions deploy connect-stripe
+          supabase functions deploy get-stripe-url
+          supabase functions deploy get-payment-link
+          supabase functions deploy admin-stats
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: phjybvphmlzghdebonzy
