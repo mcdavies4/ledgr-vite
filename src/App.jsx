@@ -1714,6 +1714,12 @@ export default function App() {
   const [timerRate, setTimerRate] = useState(""); 
   const [fxRates, setFxRates] = useState({});
   const [fxLoading, setFxLoading] = useState(false);
+  const [fxHistory, setFxHistory] = useState({}); // { "GBP_NGN": [{date, rate}, ...] }
+  const [fxHistoryLoading, setFxHistoryLoading] = useState(false);
+  const [fxAlertThreshold, setFxAlertThreshold] = useState({});
+  const [fxCalcAmount, setFxCalcAmount] = useState("");
+  const [fxCalcFrom, setFxCalcFrom] = useState("GBP");
+  const [fxCalcTo, setFxCalcTo] = useState("NGN");
 
   const [csvRows, setCsvRows] = useState([]);
   const [csvParsing, setCsvParsing] = useState(false);
@@ -1784,7 +1790,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [stripeSuccess, session]);
 
-  useEffect(() => { if (session) { loadAll(); loadAccounts(); loadPots(); loadProposals(); loadTimeEntries(); loadFxRates(); } }, [session]);
+  useEffect(() => { if (session) { loadAll(); loadAccounts(); loadPots(); loadProposals(); loadTimeEntries(); loadFxRates(); loadFxHistory(); } }, [session]);
 
   // Timer tick
   useEffect(() => {
@@ -1933,12 +1939,75 @@ export default function App() {
     if (fxLoading) return;
     setFxLoading(true);
     try {
-      const base = profile?.currency || "USD";
-      const targets = ["GBP","EUR","USD","NGN","KES","GHS","ZAR","INR","SGD","JPY"].filter(c=>c!==base).join(",");
-      const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${base}`);
-      if (res.ok) { const d = await res.json(); setFxRates(d.rates || {}); }
+      // Fetch current rates for all NGN pairs + base currency
+      const pairs = ["GBP","EUR","USD"];
+      const allRates = {};
+      for (const base of pairs) {
+        const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${base}`);
+        if (res.ok) {
+          const d = await res.json();
+          allRates[base] = d.rates || {};
+        }
+      }
+      // Also fetch user base currency
+      const userBase = profile?.currency || "USD";
+      if (!pairs.includes(userBase)) {
+        const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${userBase}`);
+        if (res.ok) { const d = await res.json(); allRates[userBase] = d.rates || {}; }
+      }
+      setFxRates(allRates);
+      // Store today's rates in Supabase for history
+      await storeDailyRates(allRates);
     } catch(e) { console.error("FX fetch failed:", e); }
     setFxLoading(false);
+  };
+
+  const storeDailyRates = async (allRates) => {
+    const today = new Date().toISOString().split("T")[0];
+    const pairs = [["GBP","NGN"],["USD","NGN"],["EUR","NGN"]];
+    for (const [from, to] of pairs) {
+      const rate = allRates[from]?.[to];
+      if (!rate) continue;
+      await supabase.from("fx_rates_history").upsert({
+        pair: `${from}_${to}`, date: today, rate, from_currency: from, to_currency: to
+      }, { onConflict: "pair,date" });
+    }
+  };
+
+  const loadFxHistory = async () => {
+    setFxHistoryLoading(true);
+    const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString().split("T")[0];
+    const { data } = await supabase.from("fx_rates_history")
+      .select("*")
+      .gte("date", thirtyDaysAgo)
+      .order("date", { ascending: true });
+    if (data) {
+      const grouped = {};
+      data.forEach(r => {
+        if (!grouped[r.pair]) grouped[r.pair] = [];
+        grouped[r.pair].push({ date: r.date, rate: r.rate });
+      });
+      setFxHistory(grouped);
+    }
+    setFxHistoryLoading(false);
+  };
+
+  const getFxSignal = (pair) => {
+    const history = fxHistory[pair] || [];
+    if (history.length < 5) return null;
+    const rates = history.map(h => h.rate);
+    const current = rates[rates.length - 1];
+    const max30 = Math.max(...rates);
+    const min30 = Math.min(...rates);
+    const avg30 = rates.reduce((s,r) => s+r, 0) / rates.length;
+    const range = max30 - min30;
+    const pctFromMax = range > 0 ? ((max30 - current) / range) * 100 : 50;
+    // Higher rate = better for sender (more NGN per GBP/USD/EUR)
+    if (pctFromMax <= 10) return { label: "Excellent", desc: "Rate near 30-day high — great time to convert", color: "#4ADE80", score: 95 };
+    if (pctFromMax <= 25) return { label: "Good", desc: "Rate above average — favourable to convert now", color: "#86efac", score: 75 };
+    if (pctFromMax <= 50) return { label: "Average", desc: "Rate around the monthly average", color: "#FBBF24", score: 50 };
+    if (pctFromMax <= 75) return { label: "Wait", desc: "Rate below average — consider holding", color: "#F97316", score: 25 };
+    return { label: "Poor", desc: "Rate near 30-day low — wait if you can", color: "#F87171", score: 10 };
   };
 
   const addInvoice = async () => {
@@ -3730,22 +3799,127 @@ Enter amount to add:`)||"0");
                     </div>
 
                     {/* FX Rates panel */}
-                    {Object.keys(fxRates).length>0&&(
-                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 20px",marginBottom:20}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                          <div style={{fontSize:13,fontWeight:700,color:C.text}}>Live FX Rates · Base: {profile?.currency||"USD"}</div>
-                          <button onClick={loadFxRates} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>{fxLoading?"…":"↻ Refresh"}</button>
+                    {/* ── FX Rate Advisor ── */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 24px",marginBottom:20}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                        <div>
+                          <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:2}}>💱 FX Rate Advisor</div>
+                          <div style={{fontSize:12,color:C.muted}}>Best time to convert your foreign earnings to NGN</div>
                         </div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
-                          {["GBP","EUR","USD","NGN","KES","GHS","ZAR","INR","SGD","JPY"].filter(c=>c!==(profile?.currency||"USD")&&fxRates[c]).map(c=>(
-                            <div key={c} style={{background:C.surface,borderRadius:8,padding:"8px 10px"}}>
-                              <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:3}}>{c}</div>
-                              <div style={{fontSize:13,fontWeight:700,color:C.text}}>{fxRates[c]?.toFixed(4)}</div>
-                            </div>
-                          ))}
-                        </div>
+                        <button onClick={()=>{loadFxRates();loadFxHistory();}} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.muted,padding:"6px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>{fxLoading?"Updating…":"↻ Refresh"}</button>
                       </div>
-                    )}
+
+                      {/* Signal cards for each NGN pair */}
+                      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:10,marginBottom:20}}>
+                        {[["GBP","NGN"],["USD","NGN"],["EUR","NGN"]].map(([from,to])=>{
+                          const pair = `${from}_${to}`;
+                          const rate = fxRates[from]?.[to];
+                          const signal = getFxSignal(pair);
+                          const history = fxHistory[pair] || [];
+                          const rates = history.map(h=>h.rate);
+                          const max30 = rates.length ? Math.max(...rates) : null;
+                          const min30 = rates.length ? Math.min(...rates) : null;
+                          return(
+                            <div key={pair} style={{background:C.surface,border:`1px solid ${signal?signal.color+"33":C.border}`,borderRadius:12,padding:"14px 16px"}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                                <div style={{fontSize:12,fontWeight:700,color:C.muted}}>{from} → {to}</div>
+                                {signal&&<span style={{fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:8,background:`${signal.color}22`,color:signal.color,border:`1px solid ${signal.color}44`}}>{signal.label}</span>}
+                              </div>
+                              <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:800,color:C.text,marginBottom:4}}>
+                                {rate ? rate.toLocaleString("en-GB",{maximumFractionDigits:2}) : "—"}
+                              </div>
+                              <div style={{fontSize:11,color:C.muted,marginBottom:8}}>1 {from} = {rate?.toLocaleString("en-GB",{maximumFractionDigits:0})} {to}</div>
+                              {signal&&<div style={{fontSize:11,color:signal.color,lineHeight:1.5}}>{signal.desc}</div>}
+                              {max30&&min30&&(
+                                <div style={{marginTop:8,display:"flex",gap:12,fontSize:10,color:C.muted}}>
+                                  <span>30d high: <strong style={{color:C.accent}}>{max30.toLocaleString("en-GB",{maximumFractionDigits:0})}</strong></span>
+                                  <span>30d low: <strong style={{color:C.danger}}>{min30.toLocaleString("en-GB",{maximumFractionDigits:0})}</strong></span>
+                                </div>
+                              )}
+                              {/* Mini sparkline */}
+                              {rates.length>1&&(()=>{
+                                const w=200,h=32;
+                                const minR=Math.min(...rates),maxR=Math.max(...rates),range=maxR-minR||1;
+                                const pts=rates.map((r,i)=>`${Math.round((i/(rates.length-1))*w)},${Math.round(h-((r-minR)/range)*h)}`).join(" ");
+                                const lastX=Math.round(w); const lastY=Math.round(h-((rates[rates.length-1]-minR)/range)*h);
+                                return(
+                                  <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{marginTop:8,display:"block"}} preserveAspectRatio="none">
+                                    <polyline points={pts} fill="none" stroke={signal?.color||C.accent} strokeWidth="1.5" strokeLinejoin="round"/>
+                                    <circle cx={lastX} cy={lastY} r="3" fill={signal?.color||C.accent}/>
+                                  </svg>
+                                );
+                              })()}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Calculator */}
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px 18px",marginBottom:16}}>
+                        <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:12}}>How much would you get today?</div>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+                          <div style={{flex:1,minWidth:100}}>
+                            <label style={{fontSize:10,fontWeight:700,color:C.muted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Amount</label>
+                            <input type="number" value={fxCalcAmount} onChange={e=>setFxCalcAmount(e.target.value)} placeholder="e.g. 1000" style={{width:"100%",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                          </div>
+                          <div>
+                            <label style={{fontSize:10,fontWeight:700,color:C.muted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>From</label>
+                            <select value={fxCalcFrom} onChange={e=>setFxCalcFrom(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                              {["GBP","USD","EUR"].map(c=><option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <div style={{fontSize:18,color:C.muted,paddingBottom:6}}>→</div>
+                          <div>
+                            <label style={{fontSize:10,fontWeight:700,color:C.muted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>To</label>
+                            <select value={fxCalcTo} onChange={e=>setFxCalcTo(e.target.value)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                              {["NGN","GHS","KES","ZAR","INR","GBP","EUR","USD"].map(c=><option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {fxCalcAmount&&parseFloat(fxCalcAmount)>0&&fxRates[fxCalcFrom]?.[fxCalcTo]&&(
+                          <div style={{marginTop:14,padding:"12px 16px",background:C.card,borderRadius:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div>
+                              <div style={{fontSize:11,color:C.muted,marginBottom:4}}>You would receive approximately</div>
+                              <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:800,color:C.accent}}>
+                                {(parseFloat(fxCalcAmount)*fxRates[fxCalcFrom][fxCalcTo]).toLocaleString("en-GB",{maximumFractionDigits:0})} {fxCalcTo}
+                              </div>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:11,color:C.muted,marginBottom:4}}>Rate</div>
+                              <div style={{fontSize:13,fontWeight:600,color:C.text}}>{fxRates[fxCalcFrom][fxCalcTo]?.toLocaleString("en-GB",{maximumFractionDigits:2})}</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Platform comparison */}
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 18px"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:10}}>Platform comparison · GBP → NGN</div>
+                        <div style={{fontSize:11,color:C.muted,marginBottom:10}}>Typical spreads vs mid-market rate (approximate)</div>
+                        {(()=>{
+                          const midRate = fxRates["GBP"]?.["NGN"] || 0;
+                          return [
+                            {name:"Grey",spread:0.005,note:"Best for NGN · used by diaspora"},
+                            {name:"Wise",spread:0.007,note:"Low fees · transparent pricing"},
+                            {name:"Payoneer",spread:0.02,note:"Good for freelance payments"},
+                            {name:"Bank transfer",spread:0.04,note:"Avoid — worst rates"},
+                          ].map((p,i)=>{
+                            const effectiveRate = midRate*(1-p.spread);
+                            const barPct = 100 - (p.spread*500);
+                            return(
+                              <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                                <div style={{width:80,fontSize:12,fontWeight:600,color:i===0?C.accent:C.text,flexShrink:0}}>{p.name}</div>
+                                <div style={{flex:1,height:6,background:C.card,borderRadius:3,overflow:"hidden"}}>
+                                  <div style={{width:`${Math.max(10,barPct)}%`,height:"100%",background:i===0?C.accent:i===3?C.danger:"#60A5FA",borderRadius:3}}/>
+                                </div>
+                                <div style={{fontSize:11,color:C.muted,minWidth:90,textAlign:"right"}}>{midRate>0?effectiveRate.toLocaleString("en-GB",{maximumFractionDigits:0})+" NGN":p.note}</div>
+                              </div>
+                            );
+                          });
+                        })()}
+                        <div style={{fontSize:10,color:C.muted,marginTop:8}}>* Rates are indicative. Always verify before transferring.</div>
+                      </div>
+                    </div>
 
                     {/* Time entries log */}
                     {timeEntries.length>0&&(
