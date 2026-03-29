@@ -1427,8 +1427,7 @@ function exportAccountantPack(invoices, expenses, profile) {
   sections.push(["Category", "Total", "", "", ""]);
   catRows.forEach(([cat, amt]) => sections.push([cat, fmt(amt), "", "", ""]));
 
-  const csv = sections.map(r => r.map(v => `"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("
-");
+  const csv = sections.map(r => r.map(v => `"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\n");
   const a = Object.assign(document.createElement("a"), {
     href: URL.createObjectURL(new Blob([csv], {type:"text/csv"})),
     download: `ledgr-accountant-pack-${year}.csv`
