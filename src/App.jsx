@@ -682,15 +682,209 @@ function TrialBanner({ profile, session }) {
 }
 
 // ── Landing + Auth wrapper ───────────────────────────────────────────────────
+// ── Demo App ─────────────────────────────────────────────────────────────────
+const DEMO_DATA = {
+  profile: { name:"Alex Johnson", currency:"GBP", email:"alex@demo.com", business_name:"Alex Johnson Design", subscription_status:"active" },
+  invoices: [
+    { id:"d1", invoice_number:7, client:"Acme Corp", description:"Brand identity redesign", amount:3200, status:"paid", due_date:"2026-02-15", type:"business", currency:"GBP", date:"2026-02-01" },
+    { id:"d2", invoice_number:8, client:"TechStart Ltd", description:"Website development — Phase 1", amount:4800, status:"paid", due_date:"2026-02-28", type:"business", currency:"GBP", date:"2026-02-10" },
+    { id:"d3", invoice_number:9, client:"Morrison & Co", description:"Monthly retainer — March", amount:1500, status:"pending", due_date:"2026-03-31", type:"business", currency:"GBP", date:"2026-03-01" },
+    { id:"d4", invoice_number:10, client:"BlueSky Agency", description:"Social media graphics pack", amount:950, status:"overdue", due_date:"2026-03-10", type:"business", currency:"GBP", date:"2026-02-25" },
+    { id:"d5", invoice_number:11, client:"Nexus Group", description:"UI/UX audit & recommendations", amount:2100, status:"pending", due_date:"2026-04-15", type:"business", currency:"GBP", date:"2026-03-15" },
+  ],
+  expenses: [
+    { id:"e1", name:"Adobe Creative Cloud", amount:54.99, category:"Software", date:"2026-03-01", type:"business" },
+    { id:"e2", name:"AWS Hosting", amount:23.40, category:"Hosting", date:"2026-03-01", type:"business" },
+    { id:"e3", name:"Client lunch — Acme Corp", amount:68, category:"Entertainment", date:"2026-02-20", type:"business" },
+    { id:"e4", name:"MacBook Pro keyboard repair", amount:180, category:"Equipment", date:"2026-02-14", type:"business" },
+    { id:"e5", name:"Figma Pro", amount:15, category:"Software", date:"2026-03-01", type:"business" },
+    { id:"e6", name:"Train to client meeting", amount:34.50, category:"Travel", date:"2026-02-28", type:"business" },
+  ],
+  clients: [
+    { id:"c1", name:"Acme Corp", email:"billing@acme.com", company:"Acme Corporation" },
+    { id:"c2", name:"TechStart Ltd", email:"accounts@techstart.io", company:"TechStart Ltd" },
+    { id:"c3", name:"Morrison & Co", email:"finance@morrison.co.uk", company:"Morrison & Co" },
+    { id:"c4", name:"BlueSky Agency", email:"hello@bluesky.agency", company:"BlueSky Agency" },
+  ],
+  alerts: [
+    { id:"a1", label:"VAT Return Q1", amount:1240, due_date:"2026-04-07", type:"business" },
+    { id:"a2", label:"Self Assessment", amount:3800, due_date:"2026-01-31", type:"business" },
+  ],
+};
+
+function DemoApp({ onExit }) {
+  const isMobile = useIsMobile();
+  const [tab, setTab] = useState("dashboard");
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const { invoices, expenses, clients, alerts, profile } = DEMO_DATA;
+  const C = { bg:"#080B10", surface:"#0D1117", card:"#0F1520", border:"#1E2535", text:"#F1F5F9", textDim:"#C8D3DF", muted:"#6B7A8D", accent:"#4ADE80", accentDim:"#0d2018", warning:"#FBBF24", danger:"#F87171", dangerDim:"#3a1a0a", blue:"#60A5FA", blueDim:"#0a1f3a" };
+  const money = (n, cur="GBP") => { try { return new Intl.NumberFormat("en-GB",{style:"currency",currency:cur||"GBP",minimumFractionDigits:2}).format(n||0); } catch { return `£${(n||0).toFixed(2)}`; }};
+  const fmtDate = d => d ? new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "-";
+  const now = new Date();
+  const totalIncome = invoices.filter(i=>i.status==="paid").reduce((s,i)=>s+i.amount,0);
+  const totalPending = invoices.filter(i=>i.status==="pending").reduce((s,i)=>s+i.amount,0);
+  const totalOverdue = invoices.filter(i=>i.status==="overdue").reduce((s,i)=>s+i.amount,0);
+  const totalExp = expenses.reduce((s,e)=>s+e.amount,0);
+  const netProfit = totalIncome - totalExp;
+  const upcoming = alerts.map(a=>({...a,days:Math.ceil((new Date(a.due_date)-now)/86400000)})).filter(a=>a.days<=60).sort((a,b)=>a.days-b.days);
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"clients",label:"Clients"}];
+  const stats = [
+    {label:"Collected",value:money(totalIncome),color:"#4ADE80"},
+    {label:"Pending",value:money(totalPending),color:"#FBBF24"},
+    {label:"Overdue",value:money(totalOverdue),color:"#F87171"},
+    {label:"Expenses",value:money(totalExp),color:"#60A5FA"},
+    {label:"Net Profit",value:money(netProfit),color:"#A78BFA"},
+  ];
+
+  return (
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,color:C.text,minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      {/* Demo banner */}
+      <div style={{background:"linear-gradient(90deg,#7c3aed,#4f46e5)",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",zIndex:200}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#fff"}}>✦ Demo mode — explore Ledgr with sample data. No account needed.</div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onExit} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",color:"#fff",padding:"6px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>← Back</button>
+          <button onClick={()=>{window.location.href="/?signup=true";}} style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"6px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>Sign up free →</button>
+        </div>
+      </div>
+      {/* Nav */}
+      <nav style={{background:"#0D1117",borderBottom:`1px solid ${C.border}`,padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+          <div style={{width:26,height:26,background:"linear-gradient(135deg,#4ADE80,#16a34a)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#060A0F"}}>L</div>
+          <span style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:800}}>Ledgr</span>
+          <span style={{fontSize:11,color:"#7c3aed",fontWeight:700,background:"#2d1f4a",padding:"2px 8px",borderRadius:8,marginLeft:4}}>DEMO</span>
+        </div>
+        {!isMobile&&TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"transparent",border:"none",color:tab===t.id?C.accent:C.muted,padding:"6px 12px",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:500,fontFamily:"'DM Sans',sans-serif",borderBottom:tab===t.id?`2px solid ${C.accent}`:"2px solid transparent"}}>
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      <div style={{flex:1,padding:isMobile?"16px":"32px 40px",maxWidth:1100,width:"100%",margin:"0 auto"}}>
+        {/* Dashboard */}
+        {tab==="dashboard"&&(
+          <div>
+            <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px",fontWeight:800}}>Financial Overview</h1>
+            <p style={{color:C.muted,fontSize:13,marginBottom:24}}>Sample data for Alex Johnson Design · GBP</p>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:10,marginBottom:24}}>
+              {stats.map((s,i)=>(
+                <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${s.color}44,transparent)`}}/>
+                  <div style={{color:C.muted,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>{s.label}</div>
+                  <div style={{color:s.color,fontSize:isMobile?14:18,fontWeight:800,fontFamily:"'Playfair Display',serif"}}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:16}}>
+              <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 20px"}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14}}>Recent Invoices</div>
+                {invoices.slice(0,4).map(inv=>(
+                  <div key={inv.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:10,marginBottom:10,borderBottom:`1px solid ${C.border}`}}>
+                    <div><div style={{fontSize:13,fontWeight:600}}>{inv.client}</div><div style={{fontSize:11,color:C.muted}}>{inv.description.slice(0,30)}</div></div>
+                    <div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:700}}>{money(inv.amount)}</div><span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:6,background:inv.status==="paid"?C.accentDim:inv.status==="overdue"?C.dangerDim:"#1f1508",color:inv.status==="paid"?C.accent:inv.status==="overdue"?C.danger:C.warning}}>{inv.status}</span></div>
+                  </div>
+                ))}
+              </div>
+              <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 20px"}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:14}}>Upcoming Payments</div>
+                {upcoming.map(a=>(
+                  <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:10,marginBottom:10,borderBottom:`1px solid ${C.border}`}}>
+                    <div><div style={{fontSize:13,fontWeight:600}}>{a.label}</div><div style={{fontSize:11,color:a.days<=7?C.danger:C.muted}}>Due in {a.days} days</div></div>
+                    <div style={{fontSize:13,fontWeight:700}}>{money(a.amount)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Invoices */}
+        {tab==="invoices"&&(
+          <div>
+            <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 20px",fontWeight:800}}>Invoices</h1>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {invoices.map(inv=>(
+                <div key={inv.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 20px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:8}}>
+                    <div><div style={{fontSize:14,fontWeight:700}}>{inv.client}</div><div style={{fontSize:12,color:C.muted}}>INV-{String(inv.invoice_number).padStart(3,"0")} · {inv.description}</div></div>
+                    <div style={{textAlign:"right",flexShrink:0}}><div style={{fontSize:18,fontWeight:800,fontFamily:"'Playfair Display',serif"}}>{money(inv.amount)}</div><span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:6,background:inv.status==="paid"?C.accentDim:inv.status==="overdue"?C.dangerDim:"#1f1508",color:inv.status==="paid"?C.accent:inv.status==="overdue"?C.danger:C.warning}}>{inv.status}</span></div>
+                  </div>
+                  <div style={{fontSize:12,color:C.muted}}>Due {fmtDate(inv.due_date)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Expenses */}
+        {tab==="expenses"&&(
+          <div>
+            <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 20px",fontWeight:800}}>Expenses</h1>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {expenses.map(exp=>(
+                <div key={exp.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div><div style={{fontSize:13,fontWeight:600}}>{exp.name}</div><div style={{fontSize:11,color:C.muted}}>{exp.category} · {exp.date}</div></div>
+                  <div style={{fontSize:14,fontWeight:700,color:C.danger}}>−{money(exp.amount)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Clients */}
+        {tab==="clients"&&(
+          <div>
+            <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 20px",fontWeight:800}}>Clients</h1>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {clients.map(c=>{
+                const cliInvs=invoices.filter(i=>i.client===c.name);
+                const total=cliInvs.reduce((s,i)=>s+i.amount,0);
+                const health=getClientHealth(cliInvs);
+                return(
+                  <div key={c.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",gap:14}}>
+                    <div style={{width:42,height:42,borderRadius:10,background:C.accentDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,color:C.accent,flexShrink:0}}>{c.name.charAt(0)}</div>
+                    <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700}}>{c.name}</div><div style={{fontSize:12,color:C.muted}}>{c.company}</div></div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{money(total)}</div>
+                      <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:8,background:`${health.color}22`,color:health.color,border:`1px solid ${health.color}44`}}>{health.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {/* CTA */}
+        <div style={{marginTop:40,background:"linear-gradient(135deg,#0d2018,#0a1a0f)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:16,padding:"28px 24px",textAlign:"center"}}>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?20:24,fontWeight:800,marginBottom:8}}>Ready to use Ledgr for real?</div>
+          <p style={{color:C.muted,fontSize:14,marginBottom:20}}>14-day free trial · No credit card · $15/month after</p>
+          <button onClick={onExit} style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"13px 32px",borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>Start free trial →</button>
+        </div>
+      </div>
+
+      {isMobile&&(
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:"flex",zIndex:200}}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px 8px",border:"none",background:"transparent",color:tab===t.id?C.accent:C.muted,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",fontFamily:"'DM Sans',sans-serif",transition:"color 0.15s",position:"relative"}}>
+              <span style={{fontSize:9,fontWeight:tab===t.id?700:500,letterSpacing:"0.04em",textTransform:"uppercase"}}>{t.label}</span>
+              {tab===t.id&&<div style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:C.accent,borderRadius:2}}/>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LandingOrAuth() {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("signup");
+  const [demoMode, setDemoMode] = useState(false);
+  if (demoMode) return <DemoApp onExit={()=>setDemoMode(false)}/>;
   if (showAuth) return <AuthScreen initialMode={authMode}/>;
-  return <LandingPage onGetStarted={(mode)=>{ setAuthMode(mode); setShowAuth(true); }}/>;
+  return <LandingPage onGetStarted={(mode)=>{ setAuthMode(mode); setShowAuth(true); }} onTryDemo={()=>setDemoMode(true)}/>;
 }
 
 // ── Landing Page ──────────────────────────────────────────────────────────────
-function LandingPage({ onGetStarted }) {
+function LandingPage({ onGetStarted, onTryDemo }) {
   const [activeFaq, setActiveFaq] = useState(null);
   const [billing, setBilling] = useState("annual"); // default annual
   return (
@@ -781,8 +975,8 @@ function LandingPage({ onGetStarted }) {
             <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"15px 36px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 8px 36px rgba(74,222,128,0.3)"}}>
               Start free — 14 days, no card
             </button>
-            <button onClick={()=>onGetStarted("login")} className="sec-btn" style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#8B95A8",padding:"15px 28px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
-              Log in →
+            <button onClick={()=>onTryDemo()} className="sec-btn" style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#8B95A8",padding:"15px 28px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+              Try demo →
             </button>
           </div>
           <p style={{color:"#3D4A5C",fontSize:12,margin:0}}>No credit card · Cancel anytime · £15/mo after trial</p>
@@ -1239,9 +1433,22 @@ function AuthScreen({ initialMode="login" }) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) setError(error.message);
       } else if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
+        // Capture referral code from URL
+        const refCode = new URLSearchParams(window.location.search).get("ref") || "";
+        const { data: signUpData, error } = await supabase.auth.signUp({
+          email, password,
+          options: { data: { referred_by: refCode || null } }
+        });
         if (error) setError(error.message);
-        else setMessage("Check your email to confirm your account, then log in.");
+        else {
+          // Save referral code to profile if present
+          if (refCode && signUpData?.user?.id) {
+            setTimeout(async () => {
+              await supabase.from("profiles").update({ referred_by: refCode }).eq("id", signUpData.user.id);
+            }, 2000);
+          }
+          setMessage("Check your email to confirm your account, then log in.");
+        }
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email);
         if (error) setError(error.message);
@@ -1481,6 +1688,14 @@ export default function App() {
   const [flutterwaveKey, setFlutterwaveKey] = useState("");
   const [paystackKey, setPaystackKey] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
+  // ── Referral state ──
+  const [referralCopied, setReferralCopied] = useState(false);
+  const referralLink = session ? `https://ledgrapp.co.uk?ref=${session.user.id.slice(0,8).toUpperCase()}` : "";
+  const copyReferral = () => {
+    navigator.clipboard?.writeText(referralLink);
+    setReferralCopied(true);
+    setTimeout(()=>setReferralCopied(false), 3000);
+  };
   // ── Income Pots state ──
   const [pots, setPots] = useState({ tax: 0, buffer: 0, savings: 0 });
   const [potSettings, setPotSettings] = useState({ taxPct: 25, bufferPct: 10, savingsPct: 5 });
@@ -2326,6 +2541,20 @@ ${businessName}`
                       </div>
                     ))}
                   </div>
+                  {/* Referral card */}
+                  <div style={{background:"linear-gradient(135deg,#1a0a2e,#0d1a0f)",border:"1px solid #A78BFA33",borderRadius:16,padding:"16px 20px",marginBottom:12,display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:200}}>
+                      <div style={{fontSize:13,fontWeight:700,color:"#A78BFA",marginBottom:4}}>💜 Give a friend 1 month free</div>
+                      <div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>Share your link — they get 1 month free, you get 1 month free when they subscribe.</div>
+                    </div>
+                    <div style={{display:"flex",gap:8,flexShrink:0}}>
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:11,color:C.muted,fontFamily:"'DM Mono',monospace",maxWidth:isMobile?140:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{referralLink}</div>
+                      <button onClick={copyReferral} style={{background:"#A78BFA22",border:"1px solid #A78BFA44",color:"#A78BFA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
+                        {referralCopied?"✓ Copied!":"Copy link"}
+                      </button>
+                    </div>
+                  </div>
+
                   <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 22px",marginBottom:12}}>
                     <h3 style={{margin:"0 0 16px",fontSize:13,fontWeight:700,color:C.textDim,textTransform:"uppercase",letterSpacing:"0.08em"}}>Recent Invoices</h3>
                     {invoices.length===0&&<p style={{color:C.muted,fontSize:13}}>No invoices yet - create your first one!</p>}
@@ -2386,6 +2615,14 @@ ${businessName}`
                         <div style={{fontSize:12,color:C.muted,marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${C.border}`}}>{inv.description} · Due {inv.due_date?fmtDate(inv.due_date):"-"}</div>
                         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                           <Btn variant="secondary" onClick={()=>generatePDF(inv,profile||{})} style={{padding:"8px 14px",fontSize:12,color:C.accent,flex:1}}>PDF</Btn>
+                          <Btn variant="secondary" onClick={()=>{
+                            const num = inv.invoice_number ? `INV-${String(inv.invoice_number).padStart(3,"0")}` : `INV-${inv.id.slice(-8,-3).toUpperCase()}`;
+                            const cur = inv.currency || profile?.currency || "USD";
+                            const m = (n) => new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(n||0);
+                            const d = (v) => v ? new Date(v).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}) : "N/A";
+                            const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Preview: ${num}</title><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;600;700&display=swap" rel="stylesheet"/><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;background:#f8fafc;padding:20px;color:#111}.card{background:#fff;max-width:680px;margin:0 auto;border-radius:16px;box-shadow:0 4px 40px rgba(0,0,0,0.08);overflow:hidden}.header{background:#060A0F;padding:28px 36px;display:flex;justify-content:space-between;align-items:flex-start}.logo{font-family:'Playfair Display',serif;font-size:24px;color:#F1F5F9}.logo span{color:#4ADE80}.inv-label{text-align:right;color:#6B7A8D;font-size:13px}.inv-num{font-size:20px;font-weight:700;color:#F1F5F9;margin-top:4px}.stripe{height:3px;background:linear-gradient(90deg,#4ADE80,#22c55e)}.body{padding:36px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:28px}.lbl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px}.val{font-size:15px;font-weight:700;color:#0f172a}.sub{font-size:13px;color:#64748b;margin-top:3px;line-height:1.5}.dates{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:28px}table{width:100%;border-collapse:collapse;margin-bottom:24px}thead tr{border-bottom:2px solid #0f172a}th{text-align:left;padding:0 0 10px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8}th:last-child{text-align:right}td{padding:14px 0;border-bottom:1px solid #f1f5f9;font-size:14px}td:last-child{text-align:right;font-weight:700}.total-box{background:#0f172a;color:#fff;padding:20px 28px;border-radius:12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}.total-lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8}.total-amt{font-family:'Playfair Display',serif;font-size:28px;color:#4ADE80}.pay-btn{display:block;background:#4ADE80;color:#060A0F;text-align:center;padding:14px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;margin-bottom:24px}.foot{text-align:center;font-size:12px;color:#94a3b8;padding-top:20px;border-top:1px solid #f1f5f9}.preview-bar{background:#7c3aed;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:600}@media(max-width:500px){.meta{grid-template-columns:1fr}.header{flex-direction:column;gap:12px}}</style></head><body><div class="preview-bar">👁 Client Preview — this is what your client will see</div><div class="card"><div class="header"><div class="logo">Ledgr<span>.</span></div><div class="inv-label">Invoice<div class="inv-num">${num}</div></div></div><div class="stripe"></div><div class="body"><div class="meta"><div><div class="lbl">From</div><div class="val">${profile?.business_name||profile?.name||"Your Name"}</div>${profile?.email?`<div class="sub">${profile.email}</div>`:""}</div><div><div class="lbl">Bill To</div><div class="val">${inv.client}</div>${inv.client_email?`<div class="sub">${inv.client_email}</div>`:""}</div></div><div class="dates"><div><div class="lbl">Issue Date</div><div class="val" style="font-size:13px">${d(new Date().toISOString())}</div></div><div><div class="lbl">Due Date</div><div class="val" style="font-size:13px">${d(inv.due_date)}</div></div><div><div class="lbl">Status</div><div class="val" style="font-size:13px;color:${inv.status==="paid"?"#16a34a":"#d97706"}">${inv.status.charAt(0).toUpperCase()+inv.status.slice(1)}</div></div></div><table><thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody><tr><td>${inv.description||"Services rendered"}</td><td style="text-align:right;font-weight:700">${m(inv.amount)}</td></tr></tbody></table><div class="total-box"><div><div class="total-lbl">Total Due</div></div><div class="total-amt">${m(inv.amount)}</div></div><a href="#" class="pay-btn" onclick="alert('In the real invoice, this button links to your Stripe payment page.');return false;">Pay Now →</a>${inv.notes?`<div style="margin-bottom:20px;padding:14px;background:#f8fafc;border-radius:8px;font-size:13px;color:#475569"><strong>Notes:</strong> ${inv.notes}</div>`:""}<div class="foot">Powered by Ledgr · ledgrapp.co.uk</div></div></div></body></html>`;
+                            const w = window.open("","_blank"); w.document.write(html); w.document.close();
+                          }} style={{padding:"8px 12px",fontSize:12,color:"#A78BFA",border:"1px solid #A78BFA44",flex:1}}>👁 Preview</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 14px",fontSize:12,flex:1}}>Mark Paid</Btn>}
                           {inv.status!=="paid"&&!profile?.stripe_account_id&&(
                             <Btn variant="secondary" onClick={()=>setModal("profile")} style={{padding:"8px 14px",fontSize:12,flex:1,color:"#FBBF24",border:"1px solid #FBBF2444"}} title="Connect Stripe in Profile to enable payment links">
