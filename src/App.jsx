@@ -1482,6 +1482,24 @@ export default function App() {
   const [flutterwaveKey, setFlutterwaveKey] = useState("");
   const [paystackKey, setPaystackKey] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
+  // ── Income Pots state ──
+  const [pots, setPots] = useState({ tax: 0, buffer: 0, savings: 0 });
+  const [potSettings, setPotSettings] = useState({ taxPct: 25, bufferPct: 10, savingsPct: 5 });
+  const [potsLoaded, setPotsLoaded] = useState(false);
+  // ── Proposals state ──
+  const [proposals, setProposals] = useState([]);
+  const [newProposal, setNewProposal] = useState({ client:"", client_id:null, title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
+  const [proposalLoading, setProposalLoading] = useState(false);
+  // ── Time Tracker state ──
+  const [timeEntries, setTimeEntries] = useState([]);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerStart, setTimerStart] = useState(null);
+  const [timerElapsed, setTimerElapsed] = useState(0);
+  const [timerClient, setTimerClient] = useState("");
+  const [timerProject, setTimerProject] = useState("");
+  const [timerRate, setTimerRate] = useState(""); 
+  const [fxRates, setFxRates] = useState({});
+  const [fxLoading, setFxLoading] = useState(false);
 
   const [csvRows, setCsvRows] = useState([]);
   const [csvParsing, setCsvParsing] = useState(false);
@@ -1552,7 +1570,21 @@ export default function App() {
     return () => clearInterval(interval);
   }, [stripeSuccess, session]);
 
-  useEffect(() => { if (session) { loadAll(); loadAccounts(); } }, [session]);
+  useEffect(() => { if (session) { loadAll(); loadAccounts(); loadPots(); loadProposals(); loadTimeEntries(); loadFxRates(); } }, [session]);
+
+  // Timer tick
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = setInterval(() => setTimerElapsed(Math.floor((Date.now() - timerStart) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, timerStart]);
+
+  // Timer tick
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = setInterval(() => setTimerElapsed(Math.floor((Date.now() - timerStart) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, timerStart]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -1592,6 +1624,107 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ── Income Pots ──────────────────────────────────────────────────────────
+  const loadPots = async () => {
+    const { data } = await supabase.from("profiles").select("pots_data, pot_settings").eq("id", session.user.id).single();
+    if (data?.pots_data) setPots(data.pots_data);
+    if (data?.pot_settings) setPotSettings(data.pot_settings);
+    setPotsLoaded(true);
+  };
+  const savePots = async (newPots, newSettings) => {
+    const p = newPots || pots; const s = newSettings || potSettings;
+    setPots(p); if (newSettings) setPotSettings(s);
+    await supabase.from("profiles").update({ pots_data: p, pot_settings: s }).eq("id", session.user.id);
+  };
+  const allocateToPots = (amount) => {
+    const taxAmt = parseFloat(((amount * potSettings.taxPct) / 100).toFixed(2));
+    const bufferAmt = parseFloat(((amount * potSettings.bufferPct) / 100).toFixed(2));
+    const savingsAmt = parseFloat(((amount * potSettings.savingsPct) / 100).toFixed(2));
+    const newPots = { tax: parseFloat((pots.tax + taxAmt).toFixed(2)), buffer: parseFloat((pots.buffer + bufferAmt).toFixed(2)), savings: parseFloat((pots.savings + savingsAmt).toFixed(2)) };
+    savePots(newPots, null);
+    return { taxAmt, bufferAmt, savingsAmt };
+  };
+
+  // ── Proposals ────────────────────────────────────────────────────────────
+  const loadProposals = async () => {
+    const { data } = await supabase.from("proposals").select("*").eq("user_id", session.user.id).order("created_at", { ascending: false });
+    if (data) setProposals(data);
+  };
+  const addProposal = async () => {
+    if (!newProposal.title || !newProposal.amount) return;
+    setProposalLoading(true);
+    const row = { ...newProposal, amount: parseFloat(newProposal.amount), user_id: session.user.id, status: "draft" };
+    const { data } = await supabase.from("proposals").insert(row).select().single();
+    if (data) setProposals(p => [data, ...p]);
+    setNewProposal({ client:"", client_id:null, title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
+    setProposalLoading(false); close();
+  };
+  const convertProposalToInvoice = async (proposal) => {
+    const { data: seqData } = await supabase.rpc("get_next_invoice_number", { p_user_id: session.user.id });
+    const row = {
+      client: proposal.client, client_id: proposal.client_id, amount: proposal.amount,
+      description: proposal.title + (proposal.description ? " — " + proposal.description : ""),
+      currency: proposal.currency || profile?.currency, type: "business", status: "pending",
+      user_id: session.user.id, invoice_number: seqData || 1,
+      due_date: new Date(Date.now() + 14*24*60*60*1000).toISOString().split("T")[0],
+    };
+    const { data } = await supabase.from("invoices").insert(row).select().single();
+    if (data) {
+      setInvoices(p => [data, ...p]);
+      await supabase.from("proposals").update({ status: "converted" }).eq("id", proposal.id);
+      setProposals(p => p.map(x => x.id===proposal.id ? {...x, status:"converted"} : x));
+      setTab("invoices");
+    }
+  };
+  const deleteProposal = async (id) => {
+    await supabase.from("proposals").delete().eq("id", id);
+    setProposals(p => p.filter(x => x.id !== id));
+  };
+
+  // ── Time Tracker ─────────────────────────────────────────────────────────
+  const loadTimeEntries = async () => {
+    const { data } = await supabase.from("time_entries").select("*").eq("user_id", session.user.id).order("created_at", { ascending: false }).limit(50);
+    if (data) setTimeEntries(data);
+  };
+  const startTimer = () => { setTimerStart(Date.now() - timerElapsed * 1000); setTimerRunning(true); };
+  const pauseTimer = () => { setTimerElapsed(Math.floor((Date.now() - timerStart) / 1000)); setTimerRunning(false); };
+  const resetTimer = () => { setTimerRunning(false); setTimerStart(null); setTimerElapsed(0); };
+  const saveTimeEntry = async () => {
+    const elapsed = timerRunning ? Math.floor((Date.now() - timerStart) / 1000) : timerElapsed;
+    if (elapsed < 60 || !timerClient) return;
+    const hours = parseFloat((elapsed / 3600).toFixed(2));
+    const rate = parseFloat(timerRate) || 0;
+    const amount = parseFloat((hours * rate).toFixed(2));
+    const row = { user_id: session.user.id, client: timerClient, project: timerProject, duration_seconds: elapsed, hours, rate, amount, currency: profile?.currency||"USD", date: new Date().toISOString().split("T")[0] };
+    const { data } = await supabase.from("time_entries").insert(row).select().single();
+    if (data) setTimeEntries(p => [data, ...p]);
+    resetTimer(); setTimerClient(""); setTimerProject(""); setTimerRate("");
+  };
+  const convertTimeToInvoice = async (entries) => {
+    if (!entries.length) return;
+    const totalAmount = entries.reduce((s,e) => s + (e.amount||0), 0);
+    const clientName = entries[0].client;
+    const clientObj = clients.find(c => c.name === clientName);
+    const { data: seqData } = await supabase.rpc("get_next_invoice_number", { p_user_id: session.user.id });
+    const desc = entries.length === 1 ? `${entries[0].project||"Work"} — ${entries[0].hours}h @ ${money(entries[0].rate, entries[0].currency)}/hr` : `${entries.length} time entries — ${entries.reduce((s,e)=>s+e.hours,0).toFixed(2)} hours total`;
+    const row = { client: clientName, client_id: clientObj?.id||null, amount: totalAmount, description: desc, currency: entries[0].currency||profile?.currency, type:"business", status:"pending", user_id: session.user.id, invoice_number: seqData||1, due_date: new Date(Date.now()+14*24*60*60*1000).toISOString().split("T")[0] };
+    const { data } = await supabase.from("invoices").insert(row).select().single();
+    if (data) { setInvoices(p => [data, ...p]); setTab("invoices"); }
+  };
+
+  // ── FX Rates ─────────────────────────────────────────────────────────────
+  const loadFxRates = async () => {
+    if (fxLoading) return;
+    setFxLoading(true);
+    try {
+      const base = profile?.currency || "USD";
+      const targets = ["GBP","EUR","USD","NGN","KES","GHS","ZAR","INR","SGD","JPY"].filter(c=>c!==base).join(",");
+      const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${base}`);
+      if (res.ok) { const d = await res.json(); setFxRates(d.rates || {}); }
+    } catch(e) { console.error("FX fetch failed:", e); }
+    setFxLoading(false);
   };
 
   const addInvoice = async () => {
@@ -1644,7 +1777,26 @@ export default function App() {
     if (data) setAlerts(p=>[data,...p]);
     setNewAlr({label:"",amount:"",due_date:"",type:"personal"}); close();
   };
-  const markPaid = async (id) => { await supabase.from("invoices").update({status:"paid"}).eq("id",id); setInvoices(p=>p.map(x=>x.id===id?{...x,status:"paid"}:x)); };
+  const markPaid = async (id) => {
+    await supabase.from("invoices").update({status:"paid"}).eq("id",id);
+    setInvoices(p=>p.map(x=>x.id===id?{...x,status:"paid"}:x));
+    // Auto-allocate to income pots
+    const inv = invoices.find(i => i.id === id);
+    if (inv && (potSettings.taxPct > 0 || potSettings.bufferPct > 0 || potSettings.savingsPct > 0)) {
+      const alloc = allocateToPots(parseFloat(inv.amount)||0);
+      if (alloc.taxAmt > 0 || alloc.bufferAmt > 0 || alloc.savingsAmt > 0) {
+        const cur = inv.currency || profile?.currency || "USD";
+        const fmt = (n) => new Intl.NumberFormat("en-GB",{style:"currency",currency:cur,minimumFractionDigits:2}).format(n);
+        setTimeout(() => alert(`💰 Income pots updated!
+
+Tax pot: +${fmt(alloc.taxAmt)}
+Buffer pot: +${fmt(alloc.bufferAmt)}
+Savings pot: +${fmt(alloc.savingsAmt)}
+
+View in the Pots tab.`), 300);
+      }
+    }
+  };
   const [linkLoading, setLinkLoading] = useState(null); // invoice id being processed
   const [reminderSending, setReminderSending] = useState(null);
   const [linkCopied, setLinkCopied] = useState(null);
@@ -2028,7 +2180,7 @@ ${businessName}`
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"},{id:"ai",label:"✦ AI"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"},{id:"pots",label:"💰 Pots"},{id:"proposals",label:"Proposals"},{id:"time",label:"⏱ Time"},{id:"ai",label:"✦ AI"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",accounts:"⬢",bank:"⬡",charts:"◭"};
@@ -3139,6 +3291,261 @@ ${businessName}`
             </div>
           )}
 
+              {/* ── INCOME POTS TAB ── */}
+              {tab==="pots"&&(()=>{
+                const cur = profile?.currency||"USD";
+                const totalPots = (pots.tax||0)+(pots.buffer||0)+(pots.savings||0);
+                const inputStyle = {width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"};
+                return(
+                  <div>
+                    <div style={{marginBottom:28}}>
+                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Income Pots</h1>
+                      <p style={{color:C.muted,fontSize:13,margin:0}}>Automatically set aside tax, buffer, and savings every time you get paid.</p>
+                    </div>
+                    {/* Total bar */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 24px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:16}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Total Set Aside</div>
+                        <div style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?28:36,fontWeight:900,color:C.accent}}>{money(totalPots,cur)}</div>
+                      </div>
+                      <div style={{fontSize:40}}>🏦</div>
+                    </div>
+                    {/* Pot cards */}
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:12,marginBottom:24}}>
+                      {[
+                        {key:"tax",label:"Tax Pot",icon:"🧾",desc:"Set aside for your tax bill",color:"#F87171",pct:potSettings.taxPct},
+                        {key:"buffer",label:"Slow Month Buffer",icon:"🛡",desc:"Emergency fund for quiet months",color:"#FBBF24",pct:potSettings.bufferPct},
+                        {key:"savings",label:"Savings",icon:"💎",desc:"Long-term savings goal",color:"#A78BFA",pct:potSettings.savingsPct},
+                      ].map(pot=>(
+                        <div key={pot.key} style={{background:C.card,border:`1px solid ${pot.color}22`,borderRadius:14,padding:"18px 20px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                            <div>
+                              <div style={{fontSize:22,marginBottom:6}}>{pot.icon}</div>
+                              <div style={{fontSize:13,fontWeight:700,color:C.text}}>{pot.label}</div>
+                              <div style={{fontSize:11,color:C.muted,marginTop:2}}>{pot.desc}</div>
+                            </div>
+                            <div style={{fontSize:11,fontWeight:700,background:`${pot.color}22`,color:pot.color,padding:"3px 8px",borderRadius:8}}>{pot.pct}%</div>
+                          </div>
+                          <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:800,color:pot.color,marginBottom:12}}>{money(pots[pot.key]||0,cur)}</div>
+                          <div style={{display:"flex",gap:6}}>
+                            <button onClick={()=>{
+                              const withdraw = parseFloat(prompt(`Withdraw from ${pot.label}?
+Current balance: ${money(pots[pot.key]||0,cur)}
+
+Enter amount to withdraw:`)||"0");
+                              if(withdraw>0&&withdraw<=(pots[pot.key]||0)){
+                                const newPots={...pots,[pot.key]:parseFloat(((pots[pot.key]||0)-withdraw).toFixed(2))};
+                                savePots(newPots,null);
+                              }
+                            }} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,color:C.muted,borderRadius:8,padding:"7px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Withdraw</button>
+                            <button onClick={()=>{
+                              const add = parseFloat(prompt(`Add to ${pot.label}:
+
+Enter amount to add:`)||"0");
+                              if(add>0){const newPots={...pots,[pot.key]:parseFloat(((pots[pot.key]||0)+add).toFixed(2))};savePots(newPots,null);}
+                            }} style={{flex:1,background:`${pot.color}22`,border:`1px solid ${pot.color}44`,color:pot.color,borderRadius:8,padding:"7px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Add</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Settings */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"20px 24px"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:16}}>Allocation Settings</div>
+                      <p style={{fontSize:12,color:C.muted,marginBottom:16,lineHeight:1.6}}>These percentages are automatically applied every time you mark an invoice as paid.</p>
+                      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:12}}>
+                        {[
+                          {key:"taxPct",label:"Tax %",color:"#F87171"},
+                          {key:"bufferPct",label:"Buffer %",color:"#FBBF24"},
+                          {key:"savingsPct",label:"Savings %",color:"#A78BFA"},
+                        ].map(s=>(
+                          <div key={s.key}>
+                            <label style={{fontSize:11,fontWeight:700,color:s.color,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.label}</label>
+                            <input type="number" min="0" max="50" value={potSettings[s.key]} onChange={e=>setPotSettings(p=>({...p,[s.key]:parseFloat(e.target.value)||0}))} style={{...inputStyle}} onBlur={()=>savePots(null,potSettings)}/>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{marginTop:12,fontSize:12,color:C.muted}}>
+                        Total allocation: <strong style={{color:(potSettings.taxPct+potSettings.bufferPct+potSettings.savingsPct)>100?C.danger:C.accent}}>{potSettings.taxPct+potSettings.bufferPct+potSettings.savingsPct}%</strong> of each payment
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── PROPOSALS TAB ── */}
+              {tab==="proposals"&&(
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,gap:12}}>
+                    <div>
+                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Proposals</h1>
+                      <p style={{color:C.muted,fontSize:13,margin:0}}>Draft proposals and convert them to invoices in one click.</p>
+                    </div>
+                    <button onClick={()=>setModal("proposal")} style={{background:C.accent,border:"none",color:"#060A0F",padding:"10px 18px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>+ New Proposal</button>
+                  </div>
+                  {proposals.length===0&&(
+                    <div style={{textAlign:"center",padding:"60px 20px",color:C.muted,background:C.card,borderRadius:16,border:`1px solid ${C.border}`}}>
+                      <div style={{fontSize:40,marginBottom:12}}>📋</div>
+                      <p style={{marginBottom:4}}>No proposals yet.</p>
+                      <p style={{fontSize:13}}>Create a proposal, send it to a client, then convert it to an invoice when accepted.</p>
+                    </div>
+                  )}
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    {proposals.map(p=>{
+                      const statusColors={draft:C.muted,sent:"#FBBF24",accepted:C.accent,declined:C.danger,converted:"#A78BFA"};
+                      const statusBgs={draft:C.surface,sent:"#1f1508",accepted:C.accentDim,declined:C.dangerDim,converted:"#1a0a2e"};
+                      return(
+                        <div key={p.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 20px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,gap:8}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{p.title}</div>
+                              <div style={{fontSize:12,color:C.muted}}>{p.client||"No client"}{p.valid_until?` · Valid until ${fmtDate(p.valid_until)}`:""}</div>
+                            </div>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:800,marginBottom:6}}>{money(p.amount,p.currency||profile?.currency)}</div>
+                              <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:8,background:statusBgs[p.status]||C.surface,color:statusColors[p.status]||C.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>{p.status}</span>
+                            </div>
+                          </div>
+                          {p.description&&<div style={{fontSize:13,color:C.textDim,marginBottom:14,lineHeight:1.6,borderTop:`1px solid ${C.border}`,paddingTop:10}}>{p.description}</div>}
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            {p.status!=="converted"&&(
+                              <button onClick={()=>convertProposalToInvoice(p)} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                                → Convert to Invoice
+                              </button>
+                            )}
+                            {["draft","sent"].includes(p.status)&&(
+                              <>
+                                <button onClick={async()=>{await supabase.from("proposals").update({status:"sent"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"sent"}:x));}} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.muted,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Sent</button>
+                                <button onClick={async()=>{await supabase.from("proposals").update({status:"accepted"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"accepted"}:x));}} style={{background:C.surface,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Accepted</button>
+                                <button onClick={async()=>{await supabase.from("proposals").update({status:"declined"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"declined"}:x));}} style={{background:C.surface,border:`1px solid ${C.danger}44`,color:C.danger,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Declined</button>
+                              </>
+                            )}
+                            <button onClick={()=>deleteProposal(p.id)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.muted,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",marginLeft:"auto"}}>Delete</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── TIME TRACKER TAB ── */}
+              {tab==="time"&&(()=>{
+                const cur = profile?.currency||"USD";
+                const elapsed = timerRunning ? Math.floor((Date.now()-timerStart)/1000) : timerElapsed;
+                const hh = String(Math.floor(elapsed/3600)).padStart(2,"0");
+                const mm = String(Math.floor((elapsed%3600)/60)).padStart(2,"0");
+                const ss = String(elapsed%60).padStart(2,"0");
+                const totalByClient = timeEntries.reduce((acc,e)=>{acc[e.client]=(acc[e.client]||0)+(e.amount||0);return acc;},{});
+                const inputStyle = {width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"};
+                return(
+                  <div>
+                    <div style={{marginBottom:24}}>
+                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Time Tracker</h1>
+                      <p style={{color:C.muted,fontSize:13,margin:0}}>Track billable hours and convert directly to invoices.</p>
+                    </div>
+                    {/* Timer */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"24px",marginBottom:20,textAlign:"center"}}>
+                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:isMobile?48:64,fontWeight:500,color:timerRunning?C.accent:C.text,letterSpacing:"0.05em",marginBottom:20,lineHeight:1}}>
+                        {hh}:{mm}:{ss}
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16,maxWidth:400,margin:"0 auto 16px"}}>
+                        <div>
+                          <label style={{fontSize:11,fontWeight:600,color:C.muted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Client</label>
+                          <select value={timerClient} onChange={e=>setTimerClient(e.target.value)} style={{...inputStyle}}>
+                            <option value="">Select client…</option>
+                            {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+                            <option value="__custom">Other…</option>
+                          </select>
+                          {timerClient==="__custom"&&<input value={timerClient} onChange={e=>setTimerClient(e.target.value)} placeholder="Client name" style={{...inputStyle,marginTop:6}}/>}
+                        </div>
+                        <div>
+                          <label style={{fontSize:11,fontWeight:600,color:C.muted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Project</label>
+                          <input value={timerProject} onChange={e=>setTimerProject(e.target.value)} placeholder="e.g. Website redesign" style={{...inputStyle}}/>
+                        </div>
+                        <div>
+                          <label style={{fontSize:11,fontWeight:600,color:C.muted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Hourly Rate ({cur})</label>
+                          <input type="number" value={timerRate} onChange={e=>setTimerRate(e.target.value)} placeholder="0.00" style={{...inputStyle}}/>
+                        </div>
+                        <div style={{display:"flex",alignItems:"flex-end"}}>
+                          {timerRate&&elapsed>0&&<div style={{fontSize:12,color:C.accent,fontWeight:600,padding:"10px 0"}}>≈ {money(parseFloat(timerRate)*(elapsed/3600),cur)}</div>}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+                        {!timerRunning?(
+                          <button onClick={startTimer} disabled={!timerClient} style={{background:C.accent,border:"none",color:"#060A0F",padding:"12px 28px",borderRadius:10,cursor:timerClient?"pointer":"not-allowed",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:timerClient?1:0.5}}>
+                            ▶ {elapsed>0?"Resume":"Start"}
+                          </button>
+                        ):(
+                          <button onClick={pauseTimer} style={{background:"#FBBF2422",border:"1px solid #FBBF2444",color:"#FBBF24",padding:"12px 28px",borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                            ⏸ Pause
+                          </button>
+                        )}
+                        {elapsed>0&&(
+                          <>
+                            <button onClick={saveTimeEntry} disabled={!timerClient||elapsed<60} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,color:C.accent,padding:"12px 24px",borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                              ✓ Log Entry
+                            </button>
+                            <button onClick={resetTimer} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.muted,padding:"12px 20px",borderRadius:10,cursor:"pointer",fontSize:14,fontFamily:"'DM Sans',sans-serif"}}>
+                              ✕ Reset
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* FX Rates panel */}
+                    {Object.keys(fxRates).length>0&&(
+                      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 20px",marginBottom:20}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                          <div style={{fontSize:13,fontWeight:700,color:C.text}}>Live FX Rates · Base: {profile?.currency||"USD"}</div>
+                          <button onClick={loadFxRates} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>{fxLoading?"…":"↻ Refresh"}</button>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
+                          {["GBP","EUR","USD","NGN","KES","GHS","ZAR","INR","SGD","JPY"].filter(c=>c!==(profile?.currency||"USD")&&fxRates[c]).map(c=>(
+                            <div key={c} style={{background:C.surface,borderRadius:8,padding:"8px 10px"}}>
+                              <div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:3}}>{c}</div>
+                              <div style={{fontSize:13,fontWeight:700,color:C.text}}>{fxRates[c]?.toFixed(4)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Time entries log */}
+                    {timeEntries.length>0&&(
+                      <div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                          <div style={{fontSize:14,fontWeight:700,color:C.text}}>Recent Entries</div>
+                          {Object.keys(totalByClient).length>0&&(
+                            <button onClick={()=>{
+                              const clientName = Object.keys(totalByClient)[0];
+                              const entries = timeEntries.filter(e=>e.client===clientName);
+                              convertTimeToInvoice(entries);
+                            }} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,color:C.accent,padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                              → Invoice All
+                            </button>
+                          )}
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                          {timeEntries.slice(0,20).map(e=>(
+                            <div key={e.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>{e.project||e.client}</div>
+                                <div style={{fontSize:11,color:C.muted}}>{e.client} · {e.hours}h · {e.date}</div>
+                              </div>
+                              <div style={{textAlign:"right",flexShrink:0}}>
+                                <div style={{fontSize:14,fontWeight:700,color:C.accent}}>{e.amount>0?money(e.amount,e.currency||cur):"-"}</div>
+                                {e.rate>0&&<div style={{fontSize:10,color:C.muted}}>{money(e.rate,e.currency||cur)}/hr</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {tab==="ai"&&(()=>{
                 const now = new Date();
                 const thisMonth = now.toISOString().slice(0,7);
@@ -3203,6 +3610,9 @@ ${businessName}`
                 {id:"charts",label:"Charts"},
                 {id:"tax",label:"Tax"},
                 {id:"vat",label:"VAT"},
+                {id:"pots",label:"💰 Pots"},
+                {id:"proposals",label:"Proposals"},
+                {id:"time",label:"⏱ Time"},
               ].map(t=>(
                 <button key={t.id} onClick={()=>{setTab(t.id);setMobileMoreOpen(false);}} style={{padding:"10px 8px",border:`1px solid ${tab===t.id?C.accent+"44":C.border}`,borderRadius:10,background:tab===t.id?"rgba(74,222,128,0.08)":C.card,color:tab===t.id?C.accent:C.textDim,cursor:"pointer",fontSize:11,fontWeight:tab===t.id?700:500,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>
                   {t.label}
@@ -3212,6 +3622,20 @@ ${businessName}`
             </div>
           )}
         </div>
+      )}
+
+      {modal==="proposal"&&(
+        <Modal title="New Proposal" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addProposal} disabled={proposalLoading} style={{flex:1}}>{proposalLoading?"Saving…":"Create Proposal"}</Btn></div>}>
+          {clients.length>0&&<SelectInput label="Client" value={newProposal.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewProposal({...newProposal,client_id:e.target.value||null,client:c?c.name:newProposal.client})}}><option value="">— Select or type below —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</SelectInput>}
+          <TextInput label="Client Name" value={newProposal.client} onChange={e=>setNewProposal({...newProposal,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
+          <TextInput label="Proposal Title" value={newProposal.title} onChange={e=>setNewProposal({...newProposal,title:e.target.value})} placeholder="e.g. Brand identity redesign"/>
+          <TextInput label="Description / Scope" value={newProposal.description} onChange={e=>setNewProposal({...newProposal,description:e.target.value})} placeholder="What's included in this proposal…"/>
+          <TextInput label="Amount" type="number" value={newProposal.amount} onChange={e=>setNewProposal({...newProposal,amount:e.target.value})} placeholder="0.00"/>
+          <SelectInput label="Currency" value={newProposal.currency||profile?.currency||"USD"} onChange={e=>setNewProposal({...newProposal,currency:e.target.value})}>
+            {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}
+          </SelectInput>
+          <TextInput label="Valid Until" type="date" value={newProposal.valid_until} onChange={e=>setNewProposal({...newProposal,valid_until:e.target.value})}/>
+        </Modal>
       )}
 
       {modal==="invoice"&&(
