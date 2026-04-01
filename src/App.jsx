@@ -1688,6 +1688,15 @@ export default function App() {
   const [flutterwaveKey, setFlutterwaveKey] = useState("");
   const [paystackKey, setPaystackKey] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
+  // ── Stage A new features state ──
+  const [incomeGoal, setIncomeGoal] = useState(0);
+  const [goalCurrency, setGoalCurrency] = useState("GBP");
+  const [affordCalcAmount, setAffordCalcAmount] = useState("");
+  const [affordCalcResult, setAffordCalcResult] = useState(null);
+  const [depositInvId, setDepositInvId] = useState(null);
+  const [depositPct, setDepositPct] = useState(50);
+  const [pipelineView, setPipelineView] = useState(false);
+
   // ── Referral state ──
   const [referralCopied, setReferralCopied] = useState(false);
   const referralLink = session ? `https://ledgrapp.co.uk?ref=${session.user.id.slice(0,8).toUpperCase()}` : "";
@@ -1851,6 +1860,7 @@ export default function App() {
     const { data } = await supabase.from("profiles").select("pots_data, pot_settings").eq("id", session.user.id).single();
     if (data?.pots_data) setPots(data.pots_data);
     if (data?.pot_settings) setPotSettings(data.pot_settings);
+    if (data?.income_goal) setIncomeGoal(data.income_goal);
     setPotsLoaded(true);
   };
   const savePots = async (newPots, newSettings) => {
@@ -2463,7 +2473,7 @@ ${businessName}`
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
 
-  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"},{id:"pots",label:"💰 Pots"},{id:"proposals",label:"Proposals"},{id:"time",label:"⏱ Time"},{id:"ai",label:"✦ AI"}];
+  const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"},{id:"pots",label:"💰 Pots"},{id:"proposals",label:"Proposals"},{id:"time",label:"⏱ Time"},{id:"pipeline",label:"🔄 Pipeline"},{id:"goals",label:"🎯 Goals"},{id:"ai",label:"✦ AI"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
 
   const ICONS={dashboard:"◈",invoices:"◎",expenses:"◉",alerts:"◐",clients:"◫",accounts:"⬢",bank:"⬡",charts:"◭"};
@@ -2712,6 +2722,11 @@ ${businessName}`
                           {inv.status!=="paid"&&!inv.client_email&&(
                             <Btn variant="secondary" onClick={()=>setModal("add-client-email-"+inv.id)} style={{padding:"8px 14px",fontSize:12,color:C.muted,border:`1px solid ${C.border}`}}>
                               🔔
+                            </Btn>
+                          )}
+                          {inv.status!=="paid"&&profile?.stripe_account_id&&(
+                            <Btn variant="secondary" onClick={()=>setDepositInvId(inv.id)} style={{padding:"8px 12px",fontSize:12,color:"#60A5FA",border:"1px solid #60A5FA44"}} title="Request partial/deposit payment">
+                              50%
                             </Btn>
                           )}
                           {inv.status!=="paid"&&inv.due_date&&new Date(inv.due_date)<new Date()&&(
@@ -3956,6 +3971,273 @@ Enter amount to add:`)||"0");
                 );
               })()}
 
+              {/* ── PIPELINE TAB ── */}
+              {tab==="pipeline"&&(()=>{
+                const cur = profile?.currency||"USD";
+                const now = new Date();
+                const stages = [
+                  { id:"proposals", label:"Proposals", color:"#A78BFA", items: proposals.filter(p=>p.status==="draft"||p.status==="sent").map(p=>({id:p.id,title:p.title,client:p.client,amount:p.amount,currency:p.currency||cur,sub:p.status==="sent"?"Awaiting response":"Draft",action:()=>setTab("proposals")})) },
+                  { id:"accepted", label:"Accepted", color:"#60A5FA", items: proposals.filter(p=>p.status==="accepted").map(p=>({id:p.id,title:p.title,client:p.client,amount:p.amount,currency:p.currency||cur,sub:"Ready to invoice",action:()=>convertProposalToInvoice(p)})) },
+                  { id:"invoiced", label:"Invoiced", color:"#FBBF24", items: invoices.filter(i=>i.status==="pending"&&(!i.due_date||new Date(i.due_date)>=now)).map(i=>({id:i.id,title:i.description||"Invoice",client:i.client,amount:i.amount,currency:i.currency||cur,sub:`Due ${i.due_date?fmtDate(i.due_date):"—"}`,action:()=>setTab("invoices")})) },
+                  { id:"overdue", label:"Overdue", color:"#F87171", items: invoices.filter(i=>i.status!=="paid"&&i.due_date&&new Date(i.due_date)<now).map(i=>({id:i.id,title:i.description||"Invoice",client:i.client,amount:i.amount,currency:i.currency||cur,sub:`${Math.floor((now-new Date(i.due_date))/86400000)}d overdue`,action:()=>setTab("invoices")})) },
+                  { id:"paid", label:"Paid", color:"#4ADE80", items: invoices.filter(i=>i.status==="paid").slice(0,8).map(i=>({id:i.id,title:i.description||"Invoice",client:i.client,amount:i.amount,currency:i.currency||cur,sub:"Collected",action:()=>setTab("invoices")})) },
+                ];
+                const totalPipeline = stages.slice(0,3).reduce((s,st)=>s+st.items.reduce((ss,i)=>ss+(parseFloat(i.amount)||0),0),0);
+                return(
+                  <div>
+                    <div style={{marginBottom:24}}>
+                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>🔄 Pipeline</h1>
+                      <p style={{color:C.muted,fontSize:13,margin:0}}>Every project, from proposal to payment — in one view.</p>
+                    </div>
+                    {/* Pipeline total */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 20px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Active Pipeline Value</div>
+                        <div style={{fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:900,color:C.accent}}>{money(totalPipeline,cur)}</div>
+                      </div>
+                      <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                        {stages.slice(0,4).map(st=>(
+                          <div key={st.id} style={{textAlign:"center"}}>
+                            <div style={{fontSize:18,fontWeight:800,color:st.color,fontFamily:"'Playfair Display',serif"}}>{st.items.length}</div>
+                            <div style={{fontSize:10,color:C.muted,fontWeight:600}}>{st.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Kanban columns */}
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(5,1fr)",gap:10}}>
+                      {stages.map(stage=>(
+                        <div key={stage.id}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                            <div style={{width:8,height:8,borderRadius:"50%",background:stage.color,flexShrink:0}}/>
+                            <div style={{fontSize:11,fontWeight:700,color:stage.color,textTransform:"uppercase",letterSpacing:"0.06em"}}>{stage.label}</div>
+                            <div style={{fontSize:11,color:C.muted,marginLeft:"auto"}}>{stage.items.length}</div>
+                          </div>
+                          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                            {stage.items.length===0&&(
+                              <div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"16px 12px",textAlign:"center",color:C.muted,fontSize:11}}>Empty</div>
+                            )}
+                            {stage.items.map(item=>(
+                              <div key={item.id} onClick={item.action} style={{background:C.card,border:`1px solid ${stage.color}22`,borderRadius:10,padding:"12px",cursor:"pointer",transition:"all 0.15s"}}
+                                onMouseEnter={e=>{e.currentTarget.style.borderColor=stage.color+"66";e.currentTarget.style.transform="translateY(-1px)";}}
+                                onMouseLeave={e=>{e.currentTarget.style.borderColor=stage.color+"22";e.currentTarget.style.transform="translateY(0)";}}>
+                                <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:3,lineHeight:1.3}}>{item.title}</div>
+                                <div style={{fontSize:11,color:C.muted,marginBottom:8}}>{item.client}</div>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                  <div style={{fontSize:13,fontWeight:800,color:stage.color,fontFamily:"'Playfair Display',serif"}}>{money(item.amount,item.currency)}</div>
+                                  <div style={{fontSize:9,color:stage.color,background:`${stage.color}22`,padding:"2px 6px",borderRadius:6,fontWeight:600}}>{item.sub}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── GOALS TAB ── */}
+              {tab==="goals"&&(()=>{
+                const cur = profile?.currency||"USD";
+                const now = new Date();
+                const thisMonth = now.toISOString().slice(0,7);
+                const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+                const dayOfMonth = now.getDate();
+                const daysLeft = daysInMonth - dayOfMonth;
+
+                // This month's data
+                const mthPaid = invoices.filter(i=>i.status==="paid"&&i.date?.startsWith(thisMonth));
+                const mthIncome = mthPaid.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+                const mthExpenses = expenses.filter(e=>e.date?.startsWith(thisMonth)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+                const mthNet = mthIncome - mthExpenses;
+                const mthPending = invoices.filter(i=>i.status!=="paid"&&i.date?.startsWith(thisMonth)).reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+                const goalPct = incomeGoal>0 ? Math.min(100, Math.round((mthIncome/incomeGoal)*100)) : 0;
+                const needed = Math.max(0, incomeGoal - mthIncome);
+                const dailyRunRate = dayOfMonth>0 ? mthIncome/dayOfMonth : 0;
+                const projectedMonthly = dailyRunRate * daysInMonth;
+
+                // Runway calculation
+                const last3Months = [0,1,2].map(i=>{
+                  const d = new Date(now); d.setMonth(d.getMonth()-i);
+                  const m = d.toISOString().slice(0,7);
+                  return invoices.filter(x=>x.status==="paid"&&x.date?.startsWith(m)).reduce((s,x)=>s+(parseFloat(x.amount)||0),0);
+                });
+                const avgMonthlyIncome = last3Months.reduce((s,x)=>s+x,0)/3;
+                const avgMonthlyExpenses = expenses.filter(e=>e.date?.slice(0,7)>=new Date(now.getFullYear(),now.getMonth()-3,1).toISOString().slice(0,7)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0)/3;
+                const monthlyBurn = avgMonthlyExpenses||0;
+                const totalSaved = (pots.tax||0)+(pots.buffer||0)+(pots.savings||0);
+                const runwayMonths = monthlyBurn>0 ? Math.floor(totalSaved/monthlyBurn) : 99;
+
+                // Slow month predictor - compare same month last year or avg
+                const historicalSameMonth = invoices.filter(i=>i.status==="paid"&&i.date?.slice(5,7)===String(now.getMonth()+1).padStart(2,"0")&&!i.date?.startsWith(thisMonth));
+                const historicalAvg = historicalSameMonth.length>0 ? historicalSameMonth.reduce((s,i)=>s+(parseFloat(i.amount)||0),0)/Math.max(1,historicalSameMonth.length/mthPaid.length||1) : 0;
+
+                // Can I afford this?
+                const availableCash = mthIncome - mthExpenses + mthPending * 0.7; // 70% of pending as conservative estimate
+                const canAfford = affordCalcAmount ? availableCash >= parseFloat(affordCalcAmount) : null;
+
+                const inputStyle = {width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"};
+
+                return(
+                  <div>
+                    <div style={{marginBottom:24}}>
+                      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:28,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>🎯 Goals & Insights</h1>
+                      <p style={{color:C.muted,fontSize:13,margin:0}}>Income targets, runway, slow month alerts and financial planning.</p>
+                    </div>
+
+                    {/* ── Income Goal ── */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,gap:12,flexWrap:"wrap"}}>
+                        <div>
+                          <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Monthly Income Goal</div>
+                          <div style={{fontSize:12,color:C.muted}}>How much do you want to earn this month?</div>
+                        </div>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          <input type="number" value={incomeGoal||""} onChange={e=>setIncomeGoal(parseFloat(e.target.value)||0)} onBlur={()=>supabase.from("profiles").update({income_goal:incomeGoal}).eq("id",session.user.id)} placeholder="e.g. 5000" style={{...inputStyle,width:120,textAlign:"right"}}/>
+                          <div style={{fontSize:12,color:C.muted,flexShrink:0}}>{cur}/mo</div>
+                        </div>
+                      </div>
+                      {incomeGoal>0&&(
+                        <>
+                          {/* Progress bar */}
+                          <div style={{marginBottom:12}}>
+                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:12}}>
+                              <span style={{color:C.muted}}>Progress this month</span>
+                              <span style={{fontWeight:700,color:goalPct>=100?C.accent:goalPct>=70?"#86efac":goalPct>=40?"#FBBF24":"#F87171"}}>{goalPct}%</span>
+                            </div>
+                            <div style={{height:8,background:C.surface,borderRadius:4,overflow:"hidden"}}>
+                              <div style={{width:`${goalPct}%`,height:"100%",background:goalPct>=100?C.accent:goalPct>=70?"#86efac":goalPct>=40?"#FBBF24":"#F87171",borderRadius:4,transition:"width 0.6s ease"}}/>
+                            </div>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
+                            {[
+                              {label:"Collected",value:money(mthIncome,cur),color:C.accent},
+                              {label:"Still needed",value:money(needed,cur),color:needed>0?"#FBBF24":C.accent},
+                              {label:"Days left",value:daysLeft+" days",color:C.text},
+                              {label:"Projected",value:money(projectedMonthly,cur),color:projectedMonthly>=incomeGoal?C.accent:"#FBBF24"},
+                            ].map((s,i)=>(
+                              <div key={i} style={{background:C.surface,borderRadius:10,padding:"10px 14px"}}>
+                                <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>{s.label}</div>
+                                <div style={{fontSize:15,fontWeight:800,color:s.color,fontFamily:"'Playfair Display',serif"}}>{s.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {needed>0&&daysLeft>0&&(
+                            <div style={{marginTop:12,padding:"10px 14px",background:"#0d1a0f",border:"1px solid #4ADE8033",borderRadius:10,fontSize:12,color:C.accent}}>
+                              → You need {money(Math.ceil(needed/daysLeft),cur)}/day for the next {daysLeft} days to hit your goal. You have {mthPending>0?`${money(mthPending,cur)} in pending invoices that could close the gap.`:"no pending invoices — time to send some."}
+                            </div>
+                          )}
+                          {goalPct>=100&&(
+                            <div style={{marginTop:12,padding:"10px 14px",background:"#0d2018",border:"1px solid #4ADE8033",borderRadius:10,fontSize:12,color:C.accent}}>
+                              🎉 Goal smashed! You've hit {money(incomeGoal,cur)} this month. Consider raising your goal.
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* ── Runway Calculator ── */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+                      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Financial Runway</div>
+                      <div style={{fontSize:12,color:C.muted,marginBottom:16}}>How long could you survive on your current savings pots if all income stopped?</div>
+                      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+                        {[
+                          {label:"Total in Pots",value:money(totalSaved,cur),color:"#A78BFA"},
+                          {label:"Avg Monthly Burn",value:money(monthlyBurn,cur),color:"#F87171"},
+                          {label:"Runway",value:runwayMonths>=99?"∞":runwayMonths+" months",color:runwayMonths>=3?C.accent:runwayMonths>=1?"#FBBF24":"#F87171"},
+                        ].map((s,i)=>(
+                          <div key={i} style={{background:C.surface,borderRadius:10,padding:"12px 14px"}}>
+                            <div style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>{s.label}</div>
+                            <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {totalSaved===0&&<div style={{fontSize:12,color:"#FBBF24",background:"#1f1508",padding:"10px 14px",borderRadius:10}}>⚠ Your savings pots are empty. Start allocating from the Pots tab to build your runway.</div>}
+                      {runwayMonths>0&&runwayMonths<3&&<div style={{fontSize:12,color:"#F87171",background:"#2a0f0f",padding:"10px 14px",borderRadius:10}}>⚠ Less than 3 months runway. Consider increasing your buffer pot allocation.</div>}
+                      {runwayMonths>=3&&totalSaved>0&&<div style={{fontSize:12,color:C.accent,background:"#0d2018",padding:"10px 14px",borderRadius:10}}>✓ You have {runwayMonths} months of runway. Solid position — keep building it.</div>}
+                    </div>
+
+                    {/* ── Slow Month Predictor ── */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+                      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Slow Month Predictor</div>
+                      <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Based on your historical income patterns.</div>
+                      {(()=>{
+                        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                        const monthlyTotals = months.map((_,mi)=>{
+                          const paid = invoices.filter(i=>i.status==="paid"&&parseInt(i.date?.slice(5,7))-1===mi);
+                          return paid.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+                        });
+                        const maxIncome = Math.max(...monthlyTotals,1);
+                        const avgIncome = monthlyTotals.filter(x=>x>0).reduce((s,x)=>s+x,0)/Math.max(1,monthlyTotals.filter(x=>x>0).length);
+                        const currentMonthIdx = now.getMonth();
+                        return(
+                          <>
+                            <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:4,marginBottom:12,alignItems:"flex-end",height:80}}>
+                              {monthlyTotals.map((amt,i)=>{
+                                const h = maxIncome>0?Math.max(4,Math.round((amt/maxIncome)*72)):4;
+                                const isLow = amt>0&&amt<avgIncome*0.6;
+                                const isCurrent = i===currentMonthIdx;
+                                return(
+                                  <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                                    <div style={{width:"100%",height:h,background:isCurrent?C.accent:isLow?"#F87171":"#2d3a2d",borderRadius:3,transition:"height 0.4s ease"}}/>
+                                    <div style={{fontSize:7,color:isCurrent?C.accent:isLow?"#F87171":C.muted,fontWeight:isCurrent?700:500}}>{months[i].slice(0,1)}</div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {monthlyTotals.some((x,i)=>x>0&&x<avgIncome*0.6&&i!==currentMonthIdx)&&(
+                              <div style={{fontSize:12,color:"#FBBF24",background:"#1f1508",border:"1px solid #FBBF2433",padding:"10px 14px",borderRadius:10,lineHeight:1.6}}>
+                                ⚠ <strong style={{color:"#FBBF24"}}>Historically slow months: </strong>
+                                {monthlyTotals.map((x,i)=>x>0&&x<avgIncome*0.6&&i!==currentMonthIdx?months[i]:null).filter(Boolean).join(", ")} — consider building your buffer pot before these arrive.
+                              </div>
+                            )}
+                            {!monthlyTotals.some(x=>x>0)&&<div style={{fontSize:12,color:C.muted}}>Log more income data to see your patterns.</div>}
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* ── Can I Afford This? ── */}
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px 24px"}}>
+                      <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Can I Afford This?</div>
+                      <div style={{fontSize:12,color:C.muted,marginBottom:16}}>Based on this month's income, expenses, and pending payments.</div>
+                      <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap",marginBottom:12}}>
+                        <div style={{flex:1,minWidth:140}}>
+                          <label style={{fontSize:11,fontWeight:700,color:C.muted,display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.06em"}}>Amount ({cur})</label>
+                          <input type="number" value={affordCalcAmount} onChange={e=>{setAffordCalcAmount(e.target.value);setAffordCalcResult(null);}} placeholder="e.g. 800" style={{...inputStyle}}/>
+                        </div>
+                        <button onClick={()=>{
+                          const amt = parseFloat(affordCalcAmount)||0;
+                          const avail = mthNet + mthPending*0.7;
+                          setAffordCalcResult({
+                            amt, avail,
+                            can: avail>=amt,
+                            comfortable: avail>=amt*1.5,
+                            tight: avail>=amt&&avail<amt*1.5,
+                          });
+                        }} disabled={!affordCalcAmount} style={{background:C.accent,border:"none",color:"#060A0F",padding:"10px 20px",borderRadius:10,cursor:affordCalcAmount?"pointer":"not-allowed",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:affordCalcAmount?1:0.5,whiteSpace:"nowrap"}}>
+                          Check →
+                        </button>
+                      </div>
+                      {affordCalcResult&&(
+                        <div style={{padding:"14px 16px",background:affordCalcResult.can?"#0d2018":"#2a0f0f",border:`1px solid ${affordCalcResult.can?"#4ADE8033":"#F8717133"}`,borderRadius:12}}>
+                          <div style={{fontSize:15,fontWeight:700,color:affordCalcResult.can?C.accent:C.danger,marginBottom:8}}>
+                            {affordCalcResult.comfortable?"✓ Yes, comfortably":affordCalcResult.tight?"⚠ Yes, but tight":"✗ Not right now"}
+                          </div>
+                          <div style={{fontSize:12,color:C.muted,lineHeight:1.7}}>
+                            Your available cash this month is <strong style={{color:C.text}}>{money(affordCalcResult.avail,cur)}</strong> (income minus expenses, plus 70% of pending invoices).<br/>
+                            {affordCalcResult.comfortable&&`Spending ${money(affordCalcResult.amt,cur)} leaves you ${money(affordCalcResult.avail-affordCalcResult.amt,cur)} — healthy buffer.`}
+                            {affordCalcResult.tight&&`Spending ${money(affordCalcResult.amt,cur)} leaves you only ${money(affordCalcResult.avail-affordCalcResult.amt,cur)} — make sure those pending invoices come in first.`}
+                            {!affordCalcResult.can&&`You're ${money(affordCalcResult.amt-affordCalcResult.avail,cur)} short. Wait until more invoices are paid, or reduce the amount.`}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {tab==="ai"&&(()=>{
                 const now = new Date();
                 const thisMonth = now.toISOString().slice(0,7);
@@ -4023,6 +4305,8 @@ Enter amount to add:`)||"0");
                 {id:"pots",label:"💰 Pots"},
                 {id:"proposals",label:"Proposals"},
                 {id:"time",label:"⏱ Time"},
+                {id:"pipeline",label:"🔄 Pipeline"},
+                {id:"goals",label:"🎯 Goals"},
               ].map(t=>(
                 <button key={t.id} onClick={()=>{setTab(t.id);setMobileMoreOpen(false);}} style={{padding:"10px 8px",border:`1px solid ${tab===t.id?C.accent+"44":C.border}`,borderRadius:10,background:tab===t.id?"rgba(74,222,128,0.08)":C.card,color:tab===t.id?C.accent:C.textDim,cursor:"pointer",fontSize:11,fontWeight:tab===t.id?700:500,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>
                   {t.label}
@@ -4033,6 +4317,51 @@ Enter amount to add:`)||"0");
           )}
         </div>
       )}
+
+      {depositInvId&&(()=>{
+        const inv = invoices.find(i=>i.id===depositInvId);
+        if (!inv) return null;
+        const cur = inv.currency||profile?.currency||"USD";
+        const depositAmount = parseFloat(((parseFloat(inv.amount)||0)*(depositPct/100)).toFixed(2));
+        return(
+          <Modal title="Request Partial Payment" onClose={()=>setDepositInvId(null)} footer={
+            <div style={{display:"flex",gap:10}}>
+              <Btn variant="secondary" onClick={()=>setDepositInvId(null)} style={{flex:1}}>Cancel</Btn>
+              <Btn onClick={async()=>{
+                // Create a new invoice for the deposit amount
+                const {data:seqData} = await supabase.rpc("get_next_invoice_number",{p_user_id:session.user.id});
+                const row = {
+                  client:inv.client, client_id:inv.client_id, client_email:inv.client_email,
+                  amount:depositAmount, description:`${depositPct}% deposit — ${inv.description||""}`,
+                  currency:cur, type:"business", status:"pending", user_id:session.user.id,
+                  invoice_number:seqData||1, due_date:new Date(Date.now()+7*24*60*60*1000).toISOString().split("T")[0],
+                };
+                const {data} = await supabase.from("invoices").insert(row).select().single();
+                if(data){setInvoices(p=>[data,...p]);}
+                setDepositInvId(null); setTab("invoices");
+              }} style={{flex:1}}>Create Deposit Invoice</Btn>
+            </div>
+          }>
+            <div style={{marginBottom:16}}>
+              <p style={{color:C.muted,fontSize:13,marginBottom:16,lineHeight:1.6}}>Create a separate invoice for a partial payment. Useful for requesting deposits upfront on large projects.</p>
+              <div style={{background:C.surface,borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+                <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Original invoice</div>
+                <div style={{fontSize:15,fontWeight:700}}>{inv.description||"Invoice"} — {new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(parseFloat(inv.amount)||0)}</div>
+              </div>
+              <label style={{fontSize:11,fontWeight:700,color:C.muted,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Deposit percentage</label>
+              <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                {[25,30,50,75].map(pct=>(
+                  <button key={pct} onClick={()=>setDepositPct(pct)} style={{padding:"8px 16px",borderRadius:8,border:`1px solid ${depositPct===pct?C.accent+"44":C.border}`,background:depositPct===pct?"rgba(74,222,128,0.08)":C.surface,color:depositPct===pct?C.accent:C.muted,cursor:"pointer",fontSize:13,fontWeight:depositPct===pct?700:500,fontFamily:"'DM Sans',sans-serif"}}>{pct}%</button>
+                ))}
+              </div>
+              <div style={{background:C.accentDim,border:`1px solid ${C.accent}33`,borderRadius:10,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:12,color:C.muted}}>Deposit invoice amount</div>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:800,color:C.accent}}>{new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(depositAmount)}</div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {modal==="proposal"&&(
         <Modal title="New Proposal" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addProposal} disabled={proposalLoading} style={{flex:1}}>{proposalLoading?"Saving…":"Create Proposal"}</Btn></div>}>
