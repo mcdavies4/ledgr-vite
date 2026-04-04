@@ -1750,7 +1750,9 @@ export default function App() {
   const [potsLoaded, setPotsLoaded] = useState(false);
   // ── Proposals state ──
   const [proposals, setProposals] = useState([]);
-  const [newProposal, setNewProposal] = useState({ client:"", client_id:null, title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
+  const [newProposal, setNewProposal] = useState({ client:"", client_id:null, client_email:"", title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
+  const [proposalSending, setProposalSending] = useState(null);
+  const [proposalLinkCopied, setProposalLinkCopied] = useState(null);
   const [proposalLoading, setProposalLoading] = useState(false);
   // ── Time Tracker state ──
   const [timeEntries, setTimeEntries] = useState([]);
@@ -1924,12 +1926,112 @@ export default function App() {
   const addProposal = async () => {
     if (!newProposal.title || !newProposal.amount) return;
     setProposalLoading(true);
-    const row = { ...newProposal, amount: parseFloat(newProposal.amount), user_id: session.user.id, status: "draft" };
+    const row = { ...newProposal, amount: parseFloat(newProposal.amount), user_id: session.user.id, status: "draft", client_email: newProposal.client_email || clients.find(c=>c.id===newProposal.client_id)?.email || "" };
     const { data } = await supabase.from("proposals").insert(row).select().single();
     if (data) setProposals(p => [data, ...p]);
     setNewProposal({ client:"", client_id:null, title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
     setProposalLoading(false); close();
   };
+  const sendProposalByEmail = async (proposal) => {
+    const clientEmail = proposal.client_email || clients.find(c=>c.id===proposal.client_id)?.email;
+    if (!clientEmail) { alert("No email address for this client. Edit the proposal to add one."); return; }
+    setProposalSending(proposal.id);
+    const cur = proposal.currency || profile?.currency || "USD";
+    const m = (n) => new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(n||0);
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'DM Sans',Arial,sans-serif;">
+<div style="max-width:580px;margin:0 auto;padding:24px 16px;">
+  <div style="background:#060A0F;padding:28px 32px;border-radius:14px 14px 0 0;display:flex;align-items:center;gap:12px;">
+    <div style="width:32px;height:32px;background:linear-gradient(135deg,#4ADE80,#16a34a);border-radius:8px;text-align:center;line-height:32px;font-weight:900;color:#060A0F;font-size:16px;flex-shrink:0;">L</div>
+    <div style="font-size:18px;font-weight:800;color:#F1F5F9;">Ledgr</div>
+  </div>
+  <div style="background:#ffffff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 14px 14px;">
+    <p style="font-size:14px;color:#475569;margin:0 0 20px;">Hi ${proposal.client||"there"},</p>
+    <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;">Please find below a proposal from <strong>${profile?.name||profile?.business_name||"your freelancer"}</strong>. Review the details and reply to accept or request changes.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:24px;">
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Proposal</div>
+      <div style="font-size:20px;font-weight:800;color:#0f172a;margin-bottom:8px;">${proposal.title}</div>
+      ${proposal.description?`<p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 16px;">${proposal.description}</p>`:""}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid #e2e8f0;">
+        <div style="font-size:12px;color:#94a3b8;">Project value</div>
+        <div style="font-size:24px;font-weight:900;color:#16a34a;font-family:Georgia,serif;">${m(proposal.amount)}</div>
+      </div>
+      ${proposal.valid_until?`<div style="font-size:12px;color:#94a3b8;margin-top:8px;">Valid until: ${new Date(proposal.valid_until).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</div>`:""}
+    </div>
+    <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;">To accept this proposal, simply reply to this email. Once accepted, an invoice will be raised.</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:24px;padding-top:16px;border-top:1px solid #f1f5f9;">Sent via Ledgr · ledgrapp.co.uk</p>
+  </div>
+</div></body></html>`;
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({
+          to_email: clientEmail,
+          to_name: proposal.client||"",
+          from_name: profile?.name||profile?.business_name||"Ledgr User",
+          subject: `Proposal: ${proposal.title} — ${m(proposal.amount)}`,
+          body: html,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      // Mark as sent
+      await supabase.from("proposals").update({status:"sent"}).eq("id",proposal.id);
+      setProposals(pr=>pr.map(x=>x.id===proposal.id?{...x,status:"sent"}:x));
+      logClientEvent(proposal.client_id,proposal.client,"email",`Proposal sent: ${proposal.title}`);
+      alert(`✓ Proposal sent to ${clientEmail}`);
+    } catch(e) { alert("Failed to send: " + e.message); }
+    setProposalSending(null);
+  };
+
+  const copyProposalLink = (proposal) => {
+    const cur = proposal.currency || profile?.currency || "USD";
+    const m = (n) => new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(n||0);
+    // Build a self-contained proposal HTML page and open it
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Proposal: ${proposal.title}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;background:#f1f5f9;padding:24px 16px;min-height:100vh}
+.card{max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 40px rgba(0,0,0,0.08)}
+.header{background:#060A0F;padding:28px 32px;display:flex;align-items:center;gap:14px}
+.logo{width:32px;height:32px;background:linear-gradient(135deg,#4ADE80,#16a34a);border-radius:8px;text-align:center;line-height:32px;font-weight:900;color:#060A0F;font-size:16px}
+.body{padding:36px}.lbl{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.title{font-size:24px;font-weight:800;color:#0f172a;margin-bottom:12px}
+.desc{font-size:15px;color:#475569;line-height:1.75;margin-bottom:28px}
+.amount-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px 24px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:center}
+.amount{font-size:32px;font-weight:900;color:#16a34a}
+.accept-btn{display:block;background:#4ADE80;color:#060A0F;text-align:center;padding:15px;border-radius:12px;font-weight:700;font-size:16px;text-decoration:none;margin-bottom:16px;cursor:pointer;border:none;width:100%;font-family:'DM Sans',Arial,sans-serif}
+.footer{text-align:center;font-size:12px;color:#94a3b8;padding-top:20px;border-top:1px solid #f1f5f9}
+</style></head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo">L</div>
+    <div style="color:#F1F5F9;font-size:18px;font-weight:800;">Ledgr</div>
+    <div style="margin-left:auto;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.3);border-radius:8px;padding:4px 12px;font-size:11px;font-weight:700;color:#4ADE80;letter-spacing:0.06em">PROPOSAL</div>
+  </div>
+  <div class="body">
+    <div class="lbl">From</div>
+    <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:20px">${profile?.name||profile?.business_name||""}</div>
+    <div class="lbl">Project</div>
+    <div class="title">${proposal.title}</div>
+    ${proposal.description?`<div class="desc">${proposal.description}</div>`:""}
+    <div class="amount-box">
+      <div><div class="lbl">Project value</div><div class="amount">${m(proposal.amount)}</div></div>
+      ${proposal.valid_until?`<div style="text-align:right"><div class="lbl">Valid until</div><div style="font-size:14px;font-weight:600;color:#0f172a">${new Date(proposal.valid_until).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</div></div>`:""}
+    </div>
+    <button class="accept-btn" onclick="this.textContent='✓ Response noted — we will be in touch!';this.style.background='#16a34a';">Accept Proposal</button>
+    <div class="footer">Sent by ${profile?.name||""} via Ledgr · ledgrapp.co.uk</div>
+  </div>
+</div>
+</body></html>`;
+    const w = window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+    setProposalLinkCopied(proposal.id);
+    setTimeout(()=>setProposalLinkCopied(null),3000);
+  };
+
   const convertProposalToInvoice = async (proposal) => {
     const { data: seqData } = await supabase.rpc("get_next_invoice_number", { p_user_id: session.user.id });
     const row = {
@@ -3894,17 +3996,36 @@ Enter amount to add:`)||"0");
                             </div>
                           </div>
                           {p.description&&<div style={{fontSize:13,color:C.textDim,marginBottom:14,lineHeight:1.6,borderTop:`1px solid ${C.border}`,paddingTop:10}}>{p.description}</div>}
+                          {/* Client email indicator */}
+                          {(()=>{
+                            const email = p.client_email || clients.find(c=>c.id===p.client_id)?.email;
+                            return email ? (
+                              <div style={{fontSize:11,color:C.muted,marginBottom:10}}>✉ {email}</div>
+                            ) : (
+                              <div style={{fontSize:11,color:"#FBBF24",marginBottom:10}}>⚠ No client email — add one to send</div>
+                            );
+                          })()}
                           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            {/* Send by email */}
+                            {["draft","sent"].includes(p.status)&&(
+                              <button onClick={()=>sendProposalByEmail(p)} disabled={proposalSending===p.id} style={{background:"#1d3a5a",border:"1px solid #60A5FA44",color:"#60A5FA",padding:"8px 14px",borderRadius:8,cursor:proposalSending===p.id?"not-allowed":"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:proposalSending===p.id?0.6:1}}>
+                                {proposalSending===p.id?"Sending…":"✉ Send to Client"}
+                              </button>
+                            )}
+                            {/* View proposal page */}
+                            <button onClick={()=>copyProposalLink(p)} style={{background:C.surface,border:`1px solid ${C.border}`,color:proposalLinkCopied===p.id?C.accent:C.textDim,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+                              {proposalLinkCopied===p.id?"✓ Opened":"👁 Preview"}
+                            </button>
+                            {/* Convert to invoice */}
                             {p.status!=="converted"&&(
                               <button onClick={()=>convertProposalToInvoice(p)} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
-                                → Convert to Invoice
+                                → Invoice
                               </button>
                             )}
                             {["draft","sent"].includes(p.status)&&(
                               <>
-                                <button onClick={async()=>{await supabase.from("proposals").update({status:"sent"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"sent"}:x));}} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.muted,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Sent</button>
-                                <button onClick={async()=>{await supabase.from("proposals").update({status:"accepted"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"accepted"}:x));}} style={{background:C.surface,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Accepted</button>
-                                <button onClick={async()=>{await supabase.from("proposals").update({status:"declined"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"declined"}:x));}} style={{background:C.surface,border:`1px solid ${C.danger}44`,color:C.danger,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Declined</button>
+                                <button onClick={async()=>{await supabase.from("proposals").update({status:"accepted"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"accepted"}:x));}} style={{background:C.surface,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>✓ Accepted</button>
+                                <button onClick={async()=>{await supabase.from("proposals").update({status:"declined"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"declined"}:x));}} style={{background:C.surface,border:`1px solid ${C.danger}44`,color:C.danger,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>✗ Declined</button>
                               </>
                             )}
                             <button onClick={()=>deleteProposal(p.id)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.muted,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",marginLeft:"auto"}}>Delete</button>
@@ -4533,8 +4654,9 @@ Enter amount to add:`)||"0");
 
       {modal==="proposal"&&(
         <Modal title="New Proposal" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addProposal} disabled={proposalLoading} style={{flex:1}}>{proposalLoading?"Saving…":"Create Proposal"}</Btn></div>}>
-          {clients.length>0&&<SelectInput label="Client" value={newProposal.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewProposal({...newProposal,client_id:e.target.value||null,client:c?c.name:newProposal.client})}}><option value="">— Select or type below —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</SelectInput>}
+          {clients.length>0&&<SelectInput label="Client" value={newProposal.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewProposal({...newProposal,client_id:e.target.value||null,client:c?c.name:newProposal.client,client_email:c?.email||newProposal.client_email})}}><option value="">— Select or type below —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.email?" · "+c.email:""}</option>)}</SelectInput>}
           <TextInput label="Client Name" value={newProposal.client} onChange={e=>setNewProposal({...newProposal,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
+          <TextInput label="Client Email (to send proposal)" type="email" value={newProposal.client_email||""} onChange={e=>setNewProposal({...newProposal,client_email:e.target.value})} placeholder="client@email.com"/>
           <TextInput label="Proposal Title" value={newProposal.title} onChange={e=>setNewProposal({...newProposal,title:e.target.value})} placeholder="e.g. Brand identity redesign"/>
           <TextInput label="Description / Scope" value={newProposal.description} onChange={e=>setNewProposal({...newProposal,description:e.target.value})} placeholder="What's included in this proposal…"/>
           <TextInput label="Amount" type="number" value={newProposal.amount} onChange={e=>setNewProposal({...newProposal,amount:e.target.value})} placeholder="0.00"/>
