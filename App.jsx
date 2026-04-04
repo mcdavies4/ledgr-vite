@@ -6,15 +6,28 @@ import PrivacyPage from "./PrivacyPage";
 import { supabase } from "./supabase";
 import { startCheckout, PRICE_MONTHLY, PRICE_ANNUAL } from "./stripe";
 
-const C = {
+const DARK = {
   bg: "#080B10", surface: "#0F1318", card: "#141A22", border: "#1E2535",
   accent: "#4ADE80", accentDim: "#0d2018", accentGlow: "rgba(74,222,128,0.12)",
   warning: "#FBBF24", warningDim: "#2a1f0a",
   danger: "#F87171", dangerDim: "#2a0f0f",
   blue: "#60A5FA", blueDim: "#0f1e35",
-  muted: "#4B5563", text: "#F1F5F9", textDim: "#8B95A8",
+  muted: "#6B7A8D", text: "#F1F5F9", textDim: "#8B95A8",
   surfaceHover: "#141A22",
 };
+
+const LIGHT = {
+  bg: "#F8FAFB", surface: "#FFFFFF", card: "#FFFFFF", border: "#E2E8F0",
+  accent: "#16a34a", accentDim: "#dcfce7", accentGlow: "rgba(22,163,74,0.1)",
+  warning: "#D97706", warningDim: "#fef3c7",
+  danger: "#DC2626", dangerDim: "#fee2e2",
+  blue: "#2563EB", blueDim: "#dbeafe",
+  muted: "#94A3B8", text: "#0F172A", textDim: "#475569",
+  surfaceHover: "#F1F5F9",
+};
+
+// C is set dynamically in App — this is the default used by pre-App components
+const C = DARK;
 
 const CURRENCIES = [
   // Major global
@@ -1669,6 +1682,28 @@ function getClientHealth(clientInvoices) {
 export default function App() {
   const isMobile = useIsMobile();
   const [session, setSession] = useState(null);
+  // ── Theme ──
+  const getAutoTheme = () => {
+    const saved = localStorage.getItem("ledgr_theme");
+    if (saved) return saved === "light";
+    const h = new Date().getHours();
+    return h >= 7 && h < 19; // light between 7am–7pm, dark otherwise
+  };
+  const [isLight, setIsLight] = useState(getAutoTheme);
+  const C = isLight ? LIGHT : DARK;
+  const toggleTheme = () => {
+    const next = !isLight;
+    setIsLight(next);
+    localStorage.setItem("ledgr_theme", next ? "light" : "dark");
+  };
+  // Auto-switch at 7am and 7pm if user hasn't manually set preference
+  useEffect(() => {
+    const check = () => {
+      if (!localStorage.getItem("ledgr_theme")) setIsLight(getAutoTheme());
+    };
+    const interval = setInterval(check, 60000); // check every minute
+    return () => clearInterval(interval);
+  }, []);
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("dashboard");
   const [filter, setFilter] = useState("all");
@@ -2528,6 +2563,12 @@ ${businessName}`
         {profile?.subscription_status==="active"&&<div style={{fontSize:11,color:C.accent,fontWeight:700,padding:"6px 12px",marginBottom:8,background:C.accentDim,borderRadius:8,display:"flex",alignItems:"center",gap:6}}><span>✓</span> Pro</div>}
         <button onClick={()=>{setEditPro(profile||{});setModal("profile");setSidebarOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:2,transition:"all 0.15s"}}>⚙ Profile</button>
         {isAdmin&&<button onClick={()=>setShowAdmin(true)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:C.accentDim,color:C.accent,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:4,fontWeight:700}}>◈ Admin</button>}
+        {/* Theme toggle */}
+        <button onClick={toggleTheme} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,cursor:"pointer",textAlign:"left",background:C.card,color:C.textDim,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:6,transition:"all 0.15s"}}>
+          <span style={{fontSize:14}}>{isLight?"🌙":"☀️"}</span>
+          {isLight?"Dark mode":"Light mode"}
+          <span style={{marginLeft:"auto",fontSize:10,color:C.muted,fontWeight:500}}>auto</span>
+        </button>
         <button onClick={signOut} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.danger,fontSize:12,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>⎋ Sign out</button>
       </div>
     </>
@@ -2545,7 +2586,7 @@ ${businessName}`
   ];
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column",transition:"background 0.3s ease, color 0.3s ease"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
       <style>{`
         * { box-sizing: border-box; }
@@ -2578,7 +2619,12 @@ ${businessName}`
             <div style={{position:"sticky",top:0,zIndex:100,background:C.bg,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,backdropFilter:"blur(20px)"}}>
               <button onClick={()=>setSidebarOpen(true)} style={{background:C.card,border:`1px solid ${C.border}`,color:C.text,borderRadius:9,width:38,height:38,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>☰</button>
               <span style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>Ledgr</span>
-              <span style={{marginLeft:"auto",color:C.muted,fontSize:12,fontWeight:500}}>{TABS.find(t=>t.id===tab)?.label}</span>
+              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={toggleTheme} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}} title={isLight?"Switch to dark":"Switch to light"}>
+                  {isLight?"🌙":"☀️"}
+                </button>
+                <span style={{color:C.muted,fontSize:12,fontWeight:500}}>{TABS.find(t=>t.id===tab)?.label}</span>
+              </div>
             </div>
           )}
 
