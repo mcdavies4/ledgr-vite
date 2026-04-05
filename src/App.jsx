@@ -6,15 +6,28 @@ import PrivacyPage from "./PrivacyPage";
 import { supabase } from "./supabase";
 import { startCheckout, PRICE_MONTHLY, PRICE_ANNUAL } from "./stripe";
 
-const C = {
+const DARK = {
   bg: "#080B10", surface: "#0F1318", card: "#141A22", border: "#1E2535",
   accent: "#4ADE80", accentDim: "#0d2018", accentGlow: "rgba(74,222,128,0.12)",
   warning: "#FBBF24", warningDim: "#2a1f0a",
   danger: "#F87171", dangerDim: "#2a0f0f",
   blue: "#60A5FA", blueDim: "#0f1e35",
-  muted: "#4B5563", text: "#F1F5F9", textDim: "#8B95A8",
+  muted: "#6B7A8D", text: "#F1F5F9", textDim: "#8B95A8",
   surfaceHover: "#141A22",
 };
+
+const LIGHT = {
+  bg: "#F8FAFB", surface: "#FFFFFF", card: "#FFFFFF", border: "#E2E8F0",
+  accent: "#16a34a", accentDim: "#dcfce7", accentGlow: "rgba(22,163,74,0.1)",
+  warning: "#D97706", warningDim: "#fef3c7",
+  danger: "#DC2626", dangerDim: "#fee2e2",
+  blue: "#2563EB", blueDim: "#dbeafe",
+  muted: "#94A3B8", text: "#0F172A", textDim: "#475569",
+  surfaceHover: "#F1F5F9",
+};
+
+// C is set dynamically in App — this is the default used by pre-App components
+const C = DARK;
 
 const CURRENCIES = [
   // Major global
@@ -1334,6 +1347,13 @@ function AdminDashboard({ session, onExit }) {
               <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="trialing"||!u.subscription_status),"trial",true)} style={{background:"#1a0a2e",border:"1px solid #A78BFA44",color:"#A78BFA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Brevo-formatted CSV of trial users only">
                 ↓ Brevo: Trial
               </button>
+              {/* Trial ended — expired/churned */}
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="expired"||u.subscription_status==="canceled"),"expired")} style={{background:"#2a0f0f",border:"1px solid #F8717133",color:"#F87171",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Users whose trial has ended or subscription cancelled">
+                ↓ Trial Ended
+              </button>
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="expired"||u.subscription_status==="canceled"),"expired",true)} style={{background:"#2a0f0f",border:"1px solid #F8717133",color:"#F87171",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Brevo CSV of expired/churned users — for win-back campaigns">
+                ↓ Brevo: Expired
+              </button>
             </>
           )}
           <button onClick={onExit} style={{background:"#141A22",border:"1px solid #1E2535",color:"#8B95A8",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
@@ -1354,6 +1374,7 @@ function AdminDashboard({ session, onExit }) {
                 {label:"Total Users", value:data.stats.total_users, color:"#F1F5F9"},
                 {label:"Active Subs", value:data.stats.active_subs, color:"#4ADE80"},
                 {label:"On Trial", value:data.stats.trialing, color:"#FBBF24"},
+                {label:"Trial Ended", value:(data.users||[]).filter(u=>u.subscription_status==="expired").length, color:"#F97316"},
                 {label:"Churned", value:data.stats.churned, color:"#F87171"},
                 {label:"MRR", value:`$${data.stats.mrr}`, color:"#4ADE80"},
               ].map((s,i) => (
@@ -1669,6 +1690,28 @@ function getClientHealth(clientInvoices) {
 export default function App() {
   const isMobile = useIsMobile();
   const [session, setSession] = useState(null);
+  // ── Theme ──
+  const getAutoTheme = () => {
+    const saved = localStorage.getItem("ledgr_theme");
+    if (saved) return saved === "light";
+    const h = new Date().getHours();
+    return h >= 7 && h < 19; // light between 7am–7pm, dark otherwise
+  };
+  const [isLight, setIsLight] = useState(getAutoTheme);
+  const C = isLight ? LIGHT : DARK;
+  const toggleTheme = () => {
+    const next = !isLight;
+    setIsLight(next);
+    localStorage.setItem("ledgr_theme", next ? "light" : "dark");
+  };
+  // Auto-switch at 7am and 7pm if user hasn't manually set preference
+  useEffect(() => {
+    const check = () => {
+      if (!localStorage.getItem("ledgr_theme")) setIsLight(getAutoTheme());
+    };
+    const interval = setInterval(check, 60000); // check every minute
+    return () => clearInterval(interval);
+  }, []);
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("dashboard");
   const [filter, setFilter] = useState("all");
@@ -1688,6 +1731,10 @@ export default function App() {
   const [flutterwaveKey, setFlutterwaveKey] = useState("");
   const [paystackKey, setPaystackKey] = useState("");
   const [selectedClient, setSelectedClient] = useState(null); // for client detail view
+  const [clientLogs, setClientLogs] = useState({}); // { clientId: [{type,desc,date,invId}] }
+  // ── Receipt scanning state ──
+  const [receiptScanning, setReceiptScanning] = useState(false);
+  const [receiptResult, setReceiptResult] = useState(null);
   // ── Stage A new features state ──
   const [incomeGoal, setIncomeGoal] = useState(0);
   const [goalCurrency, setGoalCurrency] = useState("GBP");
@@ -1711,7 +1758,9 @@ export default function App() {
   const [potsLoaded, setPotsLoaded] = useState(false);
   // ── Proposals state ──
   const [proposals, setProposals] = useState([]);
-  const [newProposal, setNewProposal] = useState({ client:"", client_id:null, title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
+  const [newProposal, setNewProposal] = useState({ client:"", client_id:null, client_email:"", title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
+  const [proposalSending, setProposalSending] = useState(null);
+  const [proposalLinkCopied, setProposalLinkCopied] = useState(null);
   const [proposalLoading, setProposalLoading] = useState(false);
   // ── Time Tracker state ──
   const [timeEntries, setTimeEntries] = useState([]);
@@ -1885,12 +1934,112 @@ export default function App() {
   const addProposal = async () => {
     if (!newProposal.title || !newProposal.amount) return;
     setProposalLoading(true);
-    const row = { ...newProposal, amount: parseFloat(newProposal.amount), user_id: session.user.id, status: "draft" };
+    const row = { ...newProposal, amount: parseFloat(newProposal.amount), user_id: session.user.id, status: "draft", client_email: newProposal.client_email || clients.find(c=>c.id===newProposal.client_id)?.email || "" };
     const { data } = await supabase.from("proposals").insert(row).select().single();
     if (data) setProposals(p => [data, ...p]);
     setNewProposal({ client:"", client_id:null, title:"", description:"", amount:"", currency:"", valid_until:"", status:"draft" });
     setProposalLoading(false); close();
   };
+  const sendProposalByEmail = async (proposal) => {
+    const clientEmail = proposal.client_email || clients.find(c=>c.id===proposal.client_id)?.email;
+    if (!clientEmail) { alert("No email address for this client. Edit the proposal to add one."); return; }
+    setProposalSending(proposal.id);
+    const cur = proposal.currency || profile?.currency || "USD";
+    const m = (n) => new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(n||0);
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'DM Sans',Arial,sans-serif;">
+<div style="max-width:580px;margin:0 auto;padding:24px 16px;">
+  <div style="background:#060A0F;padding:28px 32px;border-radius:14px 14px 0 0;display:flex;align-items:center;gap:12px;">
+    <div style="width:32px;height:32px;background:linear-gradient(135deg,#4ADE80,#16a34a);border-radius:8px;text-align:center;line-height:32px;font-weight:900;color:#060A0F;font-size:16px;flex-shrink:0;">L</div>
+    <div style="font-size:18px;font-weight:800;color:#F1F5F9;">Ledgr</div>
+  </div>
+  <div style="background:#ffffff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 14px 14px;">
+    <p style="font-size:14px;color:#475569;margin:0 0 20px;">Hi ${proposal.client||"there"},</p>
+    <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;">Please find below a proposal from <strong>${profile?.name||profile?.business_name||"your freelancer"}</strong>. Review the details and reply to accept or request changes.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:24px;">
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Proposal</div>
+      <div style="font-size:20px;font-weight:800;color:#0f172a;margin-bottom:8px;">${proposal.title}</div>
+      ${proposal.description?`<p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 16px;">${proposal.description}</p>`:""}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid #e2e8f0;">
+        <div style="font-size:12px;color:#94a3b8;">Project value</div>
+        <div style="font-size:24px;font-weight:900;color:#16a34a;font-family:Georgia,serif;">${m(proposal.amount)}</div>
+      </div>
+      ${proposal.valid_until?`<div style="font-size:12px;color:#94a3b8;margin-top:8px;">Valid until: ${new Date(proposal.valid_until).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</div>`:""}
+    </div>
+    <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;">To accept this proposal, simply reply to this email. Once accepted, an invoice will be raised.</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:24px;padding-top:16px;border-top:1px solid #f1f5f9;">Sent via Ledgr · ledgrapp.co.uk</p>
+  </div>
+</div></body></html>`;
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${SUPABASE_ANON}`,"apikey":SUPABASE_ANON},
+        body: JSON.stringify({
+          to_email: clientEmail,
+          to_name: proposal.client||"",
+          from_name: profile?.name||profile?.business_name||"Ledgr User",
+          subject: `Proposal: ${proposal.title} — ${m(proposal.amount)}`,
+          body: html,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      // Mark as sent
+      await supabase.from("proposals").update({status:"sent"}).eq("id",proposal.id);
+      setProposals(pr=>pr.map(x=>x.id===proposal.id?{...x,status:"sent"}:x));
+      logClientEvent(proposal.client_id,proposal.client,"email",`Proposal sent: ${proposal.title}`);
+      alert(`✓ Proposal sent to ${clientEmail}`);
+    } catch(e) { alert("Failed to send: " + e.message); }
+    setProposalSending(null);
+  };
+
+  const copyProposalLink = (proposal) => {
+    const cur = proposal.currency || profile?.currency || "USD";
+    const m = (n) => new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(n||0);
+    // Build a self-contained proposal HTML page and open it
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Proposal: ${proposal.title}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',Arial,sans-serif;background:#f1f5f9;padding:24px 16px;min-height:100vh}
+.card{max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 40px rgba(0,0,0,0.08)}
+.header{background:#060A0F;padding:28px 32px;display:flex;align-items:center;gap:14px}
+.logo{width:32px;height:32px;background:linear-gradient(135deg,#4ADE80,#16a34a);border-radius:8px;text-align:center;line-height:32px;font-weight:900;color:#060A0F;font-size:16px}
+.body{padding:36px}.lbl{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.title{font-size:24px;font-weight:800;color:#0f172a;margin-bottom:12px}
+.desc{font-size:15px;color:#475569;line-height:1.75;margin-bottom:28px}
+.amount-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px 24px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:center}
+.amount{font-size:32px;font-weight:900;color:#16a34a}
+.accept-btn{display:block;background:#4ADE80;color:#060A0F;text-align:center;padding:15px;border-radius:12px;font-weight:700;font-size:16px;text-decoration:none;margin-bottom:16px;cursor:pointer;border:none;width:100%;font-family:'DM Sans',Arial,sans-serif}
+.footer{text-align:center;font-size:12px;color:#94a3b8;padding-top:20px;border-top:1px solid #f1f5f9}
+</style></head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo">L</div>
+    <div style="color:#F1F5F9;font-size:18px;font-weight:800;">Ledgr</div>
+    <div style="margin-left:auto;background:rgba(74,222,128,0.15);border:1px solid rgba(74,222,128,0.3);border-radius:8px;padding:4px 12px;font-size:11px;font-weight:700;color:#4ADE80;letter-spacing:0.06em">PROPOSAL</div>
+  </div>
+  <div class="body">
+    <div class="lbl">From</div>
+    <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:20px">${profile?.name||profile?.business_name||""}</div>
+    <div class="lbl">Project</div>
+    <div class="title">${proposal.title}</div>
+    ${proposal.description?`<div class="desc">${proposal.description}</div>`:""}
+    <div class="amount-box">
+      <div><div class="lbl">Project value</div><div class="amount">${m(proposal.amount)}</div></div>
+      ${proposal.valid_until?`<div style="text-align:right"><div class="lbl">Valid until</div><div style="font-size:14px;font-weight:600;color:#0f172a">${new Date(proposal.valid_until).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</div></div>`:""}
+    </div>
+    <button class="accept-btn" onclick="this.textContent='✓ Response noted — we will be in touch!';this.style.background='#16a34a';">Accept Proposal</button>
+    <div class="footer">Sent by ${profile?.name||""} via Ledgr · ledgrapp.co.uk</div>
+  </div>
+</div>
+</body></html>`;
+    const w = window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+    setProposalLinkCopied(proposal.id);
+    setTimeout(()=>setProposalLinkCopied(null),3000);
+  };
+
   const convertProposalToInvoice = async (proposal) => {
     const { data: seqData } = await supabase.rpc("get_next_invoice_number", { p_user_id: session.user.id });
     const row = {
@@ -2073,6 +2222,8 @@ export default function App() {
   const markPaid = async (id) => {
     await supabase.from("invoices").update({status:"paid"}).eq("id",id);
     setInvoices(p=>p.map(x=>x.id===id?{...x,status:"paid"}:x));
+    const inv = invoices.find(i=>i.id===id);
+    if (inv) logClientEvent(inv.client_id, inv.client, "paid", `Invoice marked as paid: ${inv.description||"invoice"} — ${money(parseFloat(inv.amount)||0, inv.currency||profile?.currency)}`, id);
     // Auto-allocate to income pots
     const inv = invoices.find(i => i.id === id);
     if (inv && (potSettings.taxPct > 0 || potSettings.bufferPct > 0 || potSettings.savingsPct > 0)) {
@@ -2110,11 +2261,13 @@ View in the Pots tab.`), 300);
       const url = await getOrCreatePayLink(inv);
       await navigator.clipboard.writeText(url);
       setLinkCopied(inv.id);
+      logClientEvent(inv.client_id, inv.client, "link", `Payment link copied for ${inv.description||"invoice"}`, inv.id);
       setTimeout(() => setLinkCopied(null), 3000);
     } catch(e) { alert("Could not generate payment link: " + e.message); }
     setLinkLoading(null);
   };
   const emailPaymentLink = async (inv) => {
+    logClientEvent(inv.client_id, inv.client, "email", `Payment link emailed for ${inv.description||"invoice"}`, inv.id);
     setLinkLoading(inv.id + "-email");
     try {
       const url = await getOrCreatePayLink(inv);
@@ -2261,6 +2414,17 @@ ${businessName}`
       if (error) throw new Error(error);
       window.location.href = url; // redirect to Stripe OAuth
     } catch(e) { alert("Could not start Stripe Connect: " + e.message); }
+  };
+
+  // ── Client Communication Log ──────────────────────────────────────────────
+  const logClientEvent = (clientId, clientName, type, desc, invId=null) => {
+    if (!clientId && !clientName) return;
+    const key = clientId || clientName;
+    const entry = { type, desc, date: new Date().toISOString(), invId };
+    setClientLogs(prev => ({
+      ...prev,
+      [key]: [entry, ...(prev[key]||[])].slice(0,50) // keep last 50 events
+    }));
   };
 
   const disconnectStripeConnect = async () => {
@@ -2509,6 +2673,12 @@ ${businessName}`
         {profile?.subscription_status==="active"&&<div style={{fontSize:11,color:C.accent,fontWeight:700,padding:"6px 12px",marginBottom:8,background:C.accentDim,borderRadius:8,display:"flex",alignItems:"center",gap:6}}><span>✓</span> Pro</div>}
         <button onClick={()=>{setEditPro(profile||{});setModal("profile");setSidebarOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:2,transition:"all 0.15s"}}>⚙ Profile</button>
         {isAdmin&&<button onClick={()=>setShowAdmin(true)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:C.accentDim,color:C.accent,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:4,fontWeight:700}}>◈ Admin</button>}
+        {/* Theme toggle */}
+        <button onClick={toggleTheme} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,cursor:"pointer",textAlign:"left",background:C.card,color:C.textDim,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:6,transition:"all 0.15s"}}>
+          <span style={{fontSize:14}}>{isLight?"🌙":"☀️"}</span>
+          {isLight?"Dark mode":"Light mode"}
+          <span style={{marginLeft:"auto",fontSize:10,color:C.muted,fontWeight:500}}>auto</span>
+        </button>
         <button onClick={signOut} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.danger,fontSize:12,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>⎋ Sign out</button>
       </div>
     </>
@@ -2526,7 +2696,7 @@ ${businessName}`
   ];
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column",transition:"background 0.3s ease, color 0.3s ease"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
       <style>{`
         * { box-sizing: border-box; }
@@ -2559,7 +2729,12 @@ ${businessName}`
             <div style={{position:"sticky",top:0,zIndex:100,background:C.bg,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,backdropFilter:"blur(20px)"}}>
               <button onClick={()=>setSidebarOpen(true)} style={{background:C.card,border:`1px solid ${C.border}`,color:C.text,borderRadius:9,width:38,height:38,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>☰</button>
               <span style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>Ledgr</span>
-              <span style={{marginLeft:"auto",color:C.muted,fontSize:12,fontWeight:500}}>{TABS.find(t=>t.id===tab)?.label}</span>
+              <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={toggleTheme} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,width:34,height:34,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}} title={isLight?"Switch to dark":"Switch to light"}>
+                  {isLight?"🌙":"☀️"}
+                </button>
+                <span style={{color:C.muted,fontSize:12,fontWeight:500}}>{TABS.find(t=>t.id===tab)?.label}</span>
+              </div>
             </div>
           )}
 
@@ -2761,6 +2936,74 @@ ${businessName}`
                       <Btn variant="secondary" onClick={()=>exportCSV("expenses",invoices,expenses)} style={{padding:"10px 14px",fontSize:13}}>CSV</Btn>
                     </div>
                   </div>
+                  {/* Receipt Scanner */}
+                  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 18px",marginBottom:14}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:2}}>📸 Scan a Receipt</div>
+                        <div style={{fontSize:11,color:C.muted}}>Photo → AI reads it → expense logged automatically</div>
+                      </div>
+                      <label style={{background:C.accentDim,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 14px",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",flexShrink:0}}>
+                        {receiptScanning?"Reading…":"📷 Scan"}
+                        <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={async(e)=>{
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setReceiptScanning(true); setReceiptResult(null);
+                          try {
+                            const reader = new FileReader();
+                            reader.onload = async(ev) => {
+                              const base64 = ev.target.result.split(",")[1];
+                              const res = await fetch("https://api.anthropic.com/v1/messages", {
+                                method:"POST",
+                                headers:{"Content-Type":"application/json"},
+                                body: JSON.stringify({
+                                  model:"claude-sonnet-4-20250514",
+                                  max_tokens:500,
+                                  messages:[{
+                                    role:"user",
+                                    content:[
+                                      {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:base64}},
+                                      {type:"text",text:`Extract expense details from this receipt. Return ONLY a JSON object with these fields: {"name":"merchant/description","amount":number,"category":"Software|Travel|Food|Equipment|Marketing|Entertainment|Office|Other","date":"YYYY-MM-DD or today if unclear"}. No markdown, no explanation, just JSON.`}
+                                    ]
+                                  }]
+                                })
+                              });
+                              const data = await res.json();
+                              const text = data.content?.[0]?.text||"{}";
+                              try {
+                                const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+                                setReceiptResult(parsed);
+                              } catch { setReceiptResult({name:"Receipt",amount:0,category:"Other",date:new Date().toISOString().split("T")[0]}); }
+                              setReceiptScanning(false);
+                            };
+                            reader.readAsDataURL(file);
+                          } catch(err) { setReceiptScanning(false); }
+                          e.target.value="";
+                        }}/>
+                      </label>
+                    </div>
+                    {receiptScanning&&<div style={{marginTop:10,fontSize:12,color:C.muted}}>Reading receipt with AI…</div>}
+                    {receiptResult&&(
+                      <div style={{marginTop:12,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:8}}>Receipt detected — confirm to log:</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                          <div><div style={{fontSize:10,color:C.muted,marginBottom:3}}>Description</div><div style={{fontSize:13,fontWeight:600}}>{receiptResult.name}</div></div>
+                          <div><div style={{fontSize:10,color:C.muted,marginBottom:3}}>Amount</div><div style={{fontSize:13,fontWeight:600,color:C.danger}}>{money(receiptResult.amount||0,profile?.currency)}</div></div>
+                          <div><div style={{fontSize:10,color:C.muted,marginBottom:3}}>Category</div><div style={{fontSize:13,fontWeight:600}}>{receiptResult.category}</div></div>
+                          <div><div style={{fontSize:10,color:C.muted,marginBottom:3}}>Date</div><div style={{fontSize:13,fontWeight:600}}>{receiptResult.date}</div></div>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={async()=>{
+                            const row={name:receiptResult.name||"Receipt",amount:parseFloat(receiptResult.amount)||0,category:receiptResult.category||"Other",date:receiptResult.date||new Date().toISOString().split("T")[0],type:"business",user_id:session.user.id};
+                            const {data} = await supabase.from("expenses").insert(row).select().single();
+                            if(data) setExpenses(p=>[data,...p]);
+                            setReceiptResult(null);
+                          }} style={{background:C.accent,border:"none",color:"#060A0F",padding:"8px 16px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✓ Log Expense</button>
+                          <button onClick={()=>setReceiptResult(null)} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.muted,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Discard</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {fExpenses.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:C.muted,background:C.card,borderRadius:16,border:`1px solid ${C.border}`}}>No expenses logged yet.</div>}
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
                     {[...fExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp=>(
@@ -2868,7 +3111,7 @@ ${businessName}`
                       </div>
                       <h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Invoice History</h3>
                       {invoices.filter(i=>i.client_id===selectedClient.id||i.client===selectedClient.name).length===0&&<p style={{color:C.muted,fontSize:13}}>No invoices yet for this client.</p>}
-                      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
                         {invoices.filter(i=>i.client_id===selectedClient.id||i.client===selectedClient.name).map(inv=>(
                           <div key={inv.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                             <div>
@@ -2882,6 +3125,41 @@ ${businessName}`
                           </div>
                         ))}
                       </div>
+                      {/* ── Communication Log ── */}
+                      {(()=>{
+                        const key = selectedClient.id || selectedClient.name;
+                        const logs = clientLogs[key] || [];
+                        const iconMap = { link:"🔗", email:"✉️", paid:"✅", reminder:"🔔", note:"📝", invoice:"📄" };
+                        const colorMap = { link:C.blue, email:"#FBBF24", paid:C.accent, reminder:"#A78BFA", note:C.muted, invoice:C.textDim };
+                        return(
+                          <div>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                              <h3 style={{fontSize:14,fontWeight:600,margin:0}}>Communication Log</h3>
+                              <button onClick={()=>{
+                                const note = prompt("Add a note about this client:");
+                                if(note) logClientEvent(selectedClient.id,selectedClient.name,"note",note);
+                              }} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.muted,padding:"5px 10px",borderRadius:7,cursor:"pointer",fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>+ Note</button>
+                            </div>
+                            {logs.length===0&&(
+                              <div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"16px",textAlign:"center",color:C.muted,fontSize:12}}>
+                                No activity logged yet. Actions like sending payment links, emails, and marking invoices paid will appear here automatically.
+                              </div>
+                            )}
+                            <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                              {logs.map((log,i)=>(
+                                <div key={i} style={{display:"flex",gap:12,paddingBottom:12,position:"relative"}}>
+                                  {i<logs.length-1&&<div style={{position:"absolute",left:14,top:28,bottom:0,width:1,background:C.border}}/>}
+                                  <div style={{width:28,height:28,borderRadius:"50%",background:`${colorMap[log.type]||C.muted}22`,border:`1px solid ${colorMap[log.type]||C.muted}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0,zIndex:1}}>{iconMap[log.type]||"·"}</div>
+                                  <div style={{flex:1,paddingTop:4}}>
+                                    <div style={{fontSize:13,color:C.text,marginBottom:2,lineHeight:1.4}}>{log.desc}</div>
+                                    <div style={{fontSize:11,color:C.muted}}>{new Date(log.date).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     // ── Clients list view ──
@@ -3726,17 +4004,36 @@ Enter amount to add:`)||"0");
                             </div>
                           </div>
                           {p.description&&<div style={{fontSize:13,color:C.textDim,marginBottom:14,lineHeight:1.6,borderTop:`1px solid ${C.border}`,paddingTop:10}}>{p.description}</div>}
+                          {/* Client email indicator */}
+                          {(()=>{
+                            const email = p.client_email || clients.find(c=>c.id===p.client_id)?.email;
+                            return email ? (
+                              <div style={{fontSize:11,color:C.muted,marginBottom:10}}>✉ {email}</div>
+                            ) : (
+                              <div style={{fontSize:11,color:"#FBBF24",marginBottom:10}}>⚠ No client email — add one to send</div>
+                            );
+                          })()}
                           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            {/* Send by email */}
+                            {["draft","sent"].includes(p.status)&&(
+                              <button onClick={()=>sendProposalByEmail(p)} disabled={proposalSending===p.id} style={{background:"#1d3a5a",border:"1px solid #60A5FA44",color:"#60A5FA",padding:"8px 14px",borderRadius:8,cursor:proposalSending===p.id?"not-allowed":"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",opacity:proposalSending===p.id?0.6:1}}>
+                                {proposalSending===p.id?"Sending…":"✉ Send to Client"}
+                              </button>
+                            )}
+                            {/* View proposal page */}
+                            <button onClick={()=>copyProposalLink(p)} style={{background:C.surface,border:`1px solid ${C.border}`,color:proposalLinkCopied===p.id?C.accent:C.textDim,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+                              {proposalLinkCopied===p.id?"✓ Opened":"👁 Preview"}
+                            </button>
+                            {/* Convert to invoice */}
                             {p.status!=="converted"&&(
                               <button onClick={()=>convertProposalToInvoice(p)} style={{background:C.accentDim,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
-                                → Convert to Invoice
+                                → Invoice
                               </button>
                             )}
                             {["draft","sent"].includes(p.status)&&(
                               <>
-                                <button onClick={async()=>{await supabase.from("proposals").update({status:"sent"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"sent"}:x));}} style={{background:C.surface,border:`1px solid ${C.border}`,color:C.muted,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Sent</button>
-                                <button onClick={async()=>{await supabase.from("proposals").update({status:"accepted"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"accepted"}:x));}} style={{background:C.surface,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Accepted</button>
-                                <button onClick={async()=>{await supabase.from("proposals").update({status:"declined"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"declined"}:x));}} style={{background:C.surface,border:`1px solid ${C.danger}44`,color:C.danger,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Mark Declined</button>
+                                <button onClick={async()=>{await supabase.from("proposals").update({status:"accepted"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"accepted"}:x));}} style={{background:C.surface,border:`1px solid ${C.accent}44`,color:C.accent,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>✓ Accepted</button>
+                                <button onClick={async()=>{await supabase.from("proposals").update({status:"declined"}).eq("id",p.id);setProposals(pr=>pr.map(x=>x.id===p.id?{...x,status:"declined"}:x));}} style={{background:C.surface,border:`1px solid ${C.danger}44`,color:C.danger,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>✗ Declined</button>
                               </>
                             )}
                             <button onClick={()=>deleteProposal(p.id)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.muted,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:12,fontFamily:"'DM Sans',sans-serif",marginLeft:"auto"}}>Delete</button>
@@ -4365,8 +4662,9 @@ Enter amount to add:`)||"0");
 
       {modal==="proposal"&&(
         <Modal title="New Proposal" onClose={close} footer={<div style={{display:"flex",gap:10}}><Btn variant="secondary" onClick={close} style={{flex:1}}>Cancel</Btn><Btn onClick={addProposal} disabled={proposalLoading} style={{flex:1}}>{proposalLoading?"Saving…":"Create Proposal"}</Btn></div>}>
-          {clients.length>0&&<SelectInput label="Client" value={newProposal.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewProposal({...newProposal,client_id:e.target.value||null,client:c?c.name:newProposal.client})}}><option value="">— Select or type below —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</SelectInput>}
+          {clients.length>0&&<SelectInput label="Client" value={newProposal.client_id||""} onChange={e=>{const c=clients.find(x=>x.id===e.target.value);setNewProposal({...newProposal,client_id:e.target.value||null,client:c?c.name:newProposal.client,client_email:c?.email||newProposal.client_email})}}><option value="">— Select or type below —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}{c.email?" · "+c.email:""}</option>)}</SelectInput>}
           <TextInput label="Client Name" value={newProposal.client} onChange={e=>setNewProposal({...newProposal,client:e.target.value,client_id:null})} placeholder="e.g. Acme Corp"/>
+          <TextInput label="Client Email (to send proposal)" type="email" value={newProposal.client_email||""} onChange={e=>setNewProposal({...newProposal,client_email:e.target.value})} placeholder="client@email.com"/>
           <TextInput label="Proposal Title" value={newProposal.title} onChange={e=>setNewProposal({...newProposal,title:e.target.value})} placeholder="e.g. Brand identity redesign"/>
           <TextInput label="Description / Scope" value={newProposal.description} onChange={e=>setNewProposal({...newProposal,description:e.target.value})} placeholder="What's included in this proposal…"/>
           <TextInput label="Amount" type="number" value={newProposal.amount} onChange={e=>setNewProposal({...newProposal,amount:e.target.value})} placeholder="0.00"/>
