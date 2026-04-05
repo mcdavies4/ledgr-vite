@@ -1347,6 +1347,13 @@ function AdminDashboard({ session, onExit }) {
               <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="trialing"||!u.subscription_status),"trial",true)} style={{background:"#1a0a2e",border:"1px solid #A78BFA44",color:"#A78BFA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Brevo-formatted CSV of trial users only">
                 ↓ Brevo: Trial
               </button>
+              {/* Trial ended — expired/churned */}
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="expired"||u.subscription_status==="canceled"),"expired")} style={{background:"#2a0f0f",border:"1px solid #F8717133",color:"#F87171",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Users whose trial has ended or subscription cancelled">
+                ↓ Trial Ended
+              </button>
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="expired"||u.subscription_status==="canceled"),"expired",true)} style={{background:"#2a0f0f",border:"1px solid #F8717133",color:"#F87171",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Brevo CSV of expired/churned users — for win-back campaigns">
+                ↓ Brevo: Expired
+              </button>
             </>
           )}
           <button onClick={onExit} style={{background:"#141A22",border:"1px solid #1E2535",color:"#8B95A8",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
@@ -1367,6 +1374,7 @@ function AdminDashboard({ session, onExit }) {
                 {label:"Total Users", value:data.stats.total_users, color:"#F1F5F9"},
                 {label:"Active Subs", value:data.stats.active_subs, color:"#4ADE80"},
                 {label:"On Trial", value:data.stats.trialing, color:"#FBBF24"},
+                {label:"Trial Ended", value:(data.users||[]).filter(u=>u.subscription_status==="expired").length, color:"#F97316"},
                 {label:"Churned", value:data.stats.churned, color:"#F87171"},
                 {label:"MRR", value:`$${data.stats.mrr}`, color:"#4ADE80"},
               ].map((s,i) => (
