@@ -2225,7 +2225,7 @@ export default function App() {
     const inv = invoices.find(i=>i.id===id);
     if (inv) logClientEvent(inv.client_id, inv.client, "paid", `Invoice marked as paid: ${inv.description||"invoice"} — ${money(parseFloat(inv.amount)||0, inv.currency||profile?.currency)}`, id);
     // Auto-allocate to income pots
-    const inv = invoices.find(i => i.id === id);
+    // Auto-allocate to income pots
     if (inv && (potSettings.taxPct > 0 || potSettings.bufferPct > 0 || potSettings.savingsPct > 0)) {
       const alloc = allocateToPots(parseFloat(inv.amount)||0);
       if (alloc.taxAmt > 0 || alloc.bufferAmt > 0 || alloc.savingsAmt > 0) {
