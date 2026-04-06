@@ -27,7 +27,10 @@ const LIGHT = {
 };
 
 // C is set dynamically in App — this is the default used by pre-App components
-const C = DARK;
+// Theme context — all components read from this
+const ThemeContext = React.createContext(DARK);
+const useTheme = () => React.useContext(ThemeContext);
+const C = DARK; // fallback for components outside ThemeProvider
 
 const CURRENCIES = [
   // Major global
@@ -113,6 +116,7 @@ function StatusPill({ status }) {
   );
 }
 function Btn({ children, onClick, variant="primary", style={}, disabled=false }) {
+  const C = useTheme();
   const base = {
     padding:"11px 20px", borderRadius:10, fontSize:14, fontWeight:700,
     cursor:disabled?"not-allowed":"pointer", border:"none",
@@ -152,6 +156,7 @@ function ConnectCard({ icon, name, desc, color, onConnect, comingSoon }) {
 }
 
 function TextInput({ label, ...props }) {
+  const C = useTheme();
   return (
     <div style={{ marginBottom:16 }}>
       {label && <label style={{ display:"block", color:C.textDim, fontSize:11, fontWeight:700, marginBottom:7, letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>}
@@ -163,6 +168,7 @@ function TextInput({ label, ...props }) {
   );
 }
 function SelectInput({ label, children, ...props }) {
+  const C = useTheme();
   return (
     <div style={{ marginBottom:16 }}>
       <label style={{ display:"block", color:C.textDim, fontSize:11, fontWeight:700, marginBottom:7, letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>
@@ -171,6 +177,7 @@ function SelectInput({ label, children, ...props }) {
   );
 }
 function Modal({ title, onClose, children, wide=false, footer=null }) {
+  const C = useTheme();
   const mobile = window.innerWidth < 768;
   if (!document.getElementById("modal-style")) {
     const s = document.createElement("style");
@@ -566,6 +573,7 @@ function AITabs({ financeContext, invoices, clients, expenses, profile, session,
 
 // ── Paywall Screen ────────────────────────────────────────────────────────────
 function PaywallScreen({ session, onSignOut }) {
+  const C = useTheme();
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState("annual"); // default to annual — better value
   const [subError, setSubError] = useState("");
@@ -661,6 +669,7 @@ function PaywallScreen({ session, onSignOut }) {
 
 // ── Trial Banner ──────────────────────────────────────────────────────────────
 function TrialBanner({ profile, session }) {
+  const C = useTheme();
   const [loading, setLoading] = useState(null);
   const [err, setErr] = useState("");
   if (!profile?.trial_ends_at) return null;
@@ -727,10 +736,11 @@ const DEMO_DATA = {
 
 function DemoApp({ onExit }) {
   const isMobile = useIsMobile();
+  const C = useTheme();
   const [tab, setTab] = useState("dashboard");
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const { invoices, expenses, clients, alerts, profile } = DEMO_DATA;
-  const C = { bg:"#080B10", surface:"#0D1117", card:"#0F1520", border:"#1E2535", text:"#F1F5F9", textDim:"#C8D3DF", muted:"#6B7A8D", accent:"#4ADE80", accentDim:"#0d2018", warning:"#FBBF24", danger:"#F87171", dangerDim:"#3a1a0a", blue:"#60A5FA", blueDim:"#0a1f3a" };
+  const C = useTheme();
   const money = (n, cur="GBP") => { try { return new Intl.NumberFormat("en-GB",{style:"currency",currency:cur||"GBP",minimumFractionDigits:2}).format(n||0); } catch { return `£${(n||0).toFixed(2)}`; }};
   const fmtDate = d => d ? new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "-";
   const now = new Date();
@@ -898,6 +908,7 @@ function LandingOrAuth() {
 
 // ── Landing Page ──────────────────────────────────────────────────────────────
 function LandingPage({ onGetStarted, onTryDemo }) {
+  const C = useTheme();
   const [activeFaq, setActiveFaq] = useState(null);
   const [billing, setBilling] = useState("annual"); // default annual
   return (
@@ -1287,6 +1298,7 @@ function exportUsersCsv(users, label, brevoFormat=false) {
 }
 
 function AdminDashboard({ session, onExit }) {
+  const C = useTheme();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1440,6 +1452,7 @@ function AdminDashboard({ session, onExit }) {
 
 // ── Auth Screen ───────────────────────────────────────────────────────────────
 function AuthScreen({ initialMode="login" }) {
+  const C = useTheme();
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -2696,6 +2709,7 @@ ${businessName}`
   ];
 
   return (
+    <ThemeContext.Provider value={C}>
     <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column",transition:"background 0.3s ease, color 0.3s ease"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
       <style>{`
@@ -5272,5 +5286,6 @@ Enter amount to add:`)||"0");
         </Modal>
       )}
     </div>
+    </ThemeContext.Provider>
   );
 }
