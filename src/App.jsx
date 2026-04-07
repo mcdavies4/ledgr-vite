@@ -740,7 +740,6 @@ function DemoApp({ onExit }) {
   const [tab, setTab] = useState("dashboard");
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const { invoices, expenses, clients, alerts, profile } = DEMO_DATA;
-  const C = useTheme();
   const money = (n, cur="GBP") => { try { return new Intl.NumberFormat("en-GB",{style:"currency",currency:cur||"GBP",minimumFractionDigits:2}).format(n||0); } catch { return `£${(n||0).toFixed(2)}`; }};
   const fmtDate = d => d ? new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "-";
   const now = new Date();
