@@ -27,7 +27,10 @@ const LIGHT = {
 };
 
 // C is set dynamically in App — this is the default used by pre-App components
-const C = DARK;
+// Theme context — all components read from this
+const ThemeContext = React.createContext(DARK);
+const useTheme = () => React.useContext(ThemeContext);
+const C = DARK; // fallback for components outside ThemeProvider
 
 const CURRENCIES = [
   // Major global
@@ -113,6 +116,7 @@ function StatusPill({ status }) {
   );
 }
 function Btn({ children, onClick, variant="primary", style={}, disabled=false }) {
+  const C = useTheme();
   const base = {
     padding:"11px 20px", borderRadius:10, fontSize:14, fontWeight:700,
     cursor:disabled?"not-allowed":"pointer", border:"none",
@@ -128,13 +132,13 @@ function Btn({ children, onClick, variant="primary", style={}, disabled=false })
 }
 function ConnectCard({ icon, name, desc, color, onConnect, comingSoon }) {
   return (
-    <div style={{background:"#141A22",border:`1px solid ${comingSoon?"#1E2535":color+"33"}`,borderRadius:16,padding:20,position:"relative",overflow:"hidden",opacity:comingSoon?0.6:1}}>
+    <div style={{background:C.card,border:`1px solid ${comingSoon?C.border:color+"33"}`,borderRadius:16,padding:20,position:"relative",overflow:"hidden",opacity:comingSoon?0.6:1}}>
       <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:comingSoon?"#1E2535":`linear-gradient(90deg,${color},${color}88)`}}/>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-        <div style={{width:40,height:40,borderRadius:12,background:"#0F1318",border:`1px solid ${comingSoon?"#1E2535":color+"44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{icon}</div>
+        <div style={{width:40,height:40,borderRadius:12,background:C.surface,border:`1px solid ${comingSoon?C.border:color+"44"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{icon}</div>
         <div>
           <div style={{fontSize:15,fontWeight:700,color:"#F1F5F9"}}>{name}</div>
-          {comingSoon && <span style={{fontSize:10,background:"#1E2535",padding:"2px 7px",borderRadius:4,color:"#4B5563",fontWeight:600}}>COMING SOON</span>}
+          {comingSoon && <span style={{fontSize:10,background:C.border,padding:"2px 7px",borderRadius:4,color:"#4B5563",fontWeight:600}}>COMING SOON</span>}
         </div>
       </div>
       <p style={{fontSize:13,color:"#8B95A8",marginBottom:16,lineHeight:1.6}}>{desc}</p>
@@ -152,6 +156,7 @@ function ConnectCard({ icon, name, desc, color, onConnect, comingSoon }) {
 }
 
 function TextInput({ label, ...props }) {
+  const C = useTheme();
   return (
     <div style={{ marginBottom:16 }}>
       {label && <label style={{ display:"block", color:C.textDim, fontSize:11, fontWeight:700, marginBottom:7, letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>}
@@ -163,6 +168,7 @@ function TextInput({ label, ...props }) {
   );
 }
 function SelectInput({ label, children, ...props }) {
+  const C = useTheme();
   return (
     <div style={{ marginBottom:16 }}>
       <label style={{ display:"block", color:C.textDim, fontSize:11, fontWeight:700, marginBottom:7, letterSpacing:"0.08em", textTransform:"uppercase" }}>{label}</label>
@@ -171,6 +177,7 @@ function SelectInput({ label, children, ...props }) {
   );
 }
 function Modal({ title, onClose, children, wide=false, footer=null }) {
+  const C = useTheme();
   const mobile = window.innerWidth < 768;
   if (!document.getElementById("modal-style")) {
     const s = document.createElement("style");
@@ -566,6 +573,7 @@ function AITabs({ financeContext, invoices, clients, expenses, profile, session,
 
 // ── Paywall Screen ────────────────────────────────────────────────────────────
 function PaywallScreen({ session, onSignOut }) {
+  const C = useTheme();
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState("annual"); // default to annual — better value
   const [subError, setSubError] = useState("");
@@ -661,6 +669,7 @@ function PaywallScreen({ session, onSignOut }) {
 
 // ── Trial Banner ──────────────────────────────────────────────────────────────
 function TrialBanner({ profile, session }) {
+  const C = useTheme();
   const [loading, setLoading] = useState(null);
   const [err, setErr] = useState("");
   if (!profile?.trial_ends_at) return null;
@@ -727,10 +736,11 @@ const DEMO_DATA = {
 
 function DemoApp({ onExit }) {
   const isMobile = useIsMobile();
+  const C = useTheme();
   const [tab, setTab] = useState("dashboard");
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const { invoices, expenses, clients, alerts, profile } = DEMO_DATA;
-  const C = { bg:"#080B10", surface:"#0D1117", card:"#0F1520", border:"#1E2535", text:"#F1F5F9", textDim:"#C8D3DF", muted:"#6B7A8D", accent:"#4ADE80", accentDim:"#0d2018", warning:"#FBBF24", danger:"#F87171", dangerDim:"#3a1a0a", blue:"#60A5FA", blueDim:"#0a1f3a" };
+  const C = useTheme();
   const money = (n, cur="GBP") => { try { return new Intl.NumberFormat("en-GB",{style:"currency",currency:cur||"GBP",minimumFractionDigits:2}).format(n||0); } catch { return `£${(n||0).toFixed(2)}`; }};
   const fmtDate = d => d ? new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "-";
   const now = new Date();
@@ -761,7 +771,7 @@ function DemoApp({ onExit }) {
         </div>
       </div>
       {/* Nav */}
-      <nav style={{background:"#0D1117",borderBottom:`1px solid ${C.border}`,padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:16}}>
+      <nav style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 24px",display:"flex",alignItems:"center",height:52,gap:16}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
           <div style={{width:26,height:26,background:"linear-gradient(135deg,#4ADE80,#16a34a)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#060A0F"}}>L</div>
           <span style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:800}}>Ledgr</span>
@@ -898,6 +908,7 @@ function LandingOrAuth() {
 
 // ── Landing Page ──────────────────────────────────────────────────────────────
 function LandingPage({ onGetStarted, onTryDemo }) {
+  const C = useTheme();
   const [activeFaq, setActiveFaq] = useState(null);
   const [billing, setBilling] = useState("annual"); // default annual
   return (
@@ -1287,6 +1298,7 @@ function exportUsersCsv(users, label, brevoFormat=false) {
 }
 
 function AdminDashboard({ session, onExit }) {
+  const C = useTheme();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1311,7 +1323,7 @@ function AdminDashboard({ session, onExit }) {
 
   const fmtDate = d => d ? new Date(d).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" }) : "-";
   const statusColor = s => s==="active"?"#4ADE80":s==="trialing"?"#FBBF24":s==="canceled"?"#F87171":"#8B95A8";
-  const statusBg = s => s==="active"?"#0a2018":s==="trialing"?"#1f1508":s==="canceled"?"#1f0808":"#141A22";
+  const statusBg = s => s==="active"?"#0a2018":s==="trialing"?"#1f1508":s==="canceled"?"#1f0808":C.card;
 
   const filtered = (data?.users||[]).filter(u =>
     u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -1319,9 +1331,9 @@ function AdminDashboard({ session, onExit }) {
   );
 
   return (
-    <div style={{minHeight:"100vh",background:"#080B10",color:"#F1F5F9",fontFamily:"'DM Sans',sans-serif"}}>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>
       {/* Header */}
-      <div style={{background:"#0F1318",borderBottom:"1px solid #1E2535",padding:"16px 32px",display:"flex",alignItems:"center",gap:16}}>
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"16px 32px",display:"flex",alignItems:"center",gap:16}}>
         <div style={{width:32,height:32,background:"linear-gradient(135deg,#4ADE80,#22c55e)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:900,color:"#060A0E"}}>L</div>
         <div>
           <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:800}}>Ledgr Admin</div>
@@ -1356,7 +1368,7 @@ function AdminDashboard({ session, onExit }) {
               </button>
             </>
           )}
-          <button onClick={onExit} style={{background:"#141A22",border:"1px solid #1E2535",color:"#8B95A8",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+          <button onClick={onExit} style={{background:C.card,border:"1px solid #1E2535",color:"#8B95A8",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
             Back to App
           </button>
         </div>
@@ -1378,7 +1390,7 @@ function AdminDashboard({ session, onExit }) {
                 {label:"Churned", value:data.stats.churned, color:"#F87171"},
                 {label:"MRR", value:`$${data.stats.mrr}`, color:"#4ADE80"},
               ].map((s,i) => (
-                <div key={i} style={{background:"#141A22",border:"1px solid #1E2535",borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+                <div key={i} style={{background:C.card,border:"1px solid #1E2535",borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
                   <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${s.color}55,transparent)`}}/>
                   <div style={{fontSize:9,fontWeight:700,color:"#4B5563",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>{s.label}</div>
                   <div style={{fontSize:26,fontWeight:800,color:s.color,fontFamily:"'Playfair Display',serif"}}>{s.value}</div>
@@ -1440,6 +1452,7 @@ function AdminDashboard({ session, onExit }) {
 
 // ── Auth Screen ───────────────────────────────────────────────────────────────
 function AuthScreen({ initialMode="login" }) {
+  const C = useTheme();
   const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -2225,7 +2238,7 @@ export default function App() {
     const inv = invoices.find(i=>i.id===id);
     if (inv) logClientEvent(inv.client_id, inv.client, "paid", `Invoice marked as paid: ${inv.description||"invoice"} — ${money(parseFloat(inv.amount)||0, inv.currency||profile?.currency)}`, id);
     // Auto-allocate to income pots
-    const inv = invoices.find(i => i.id === id);
+    // Auto-allocate to income pots
     if (inv && (potSettings.taxPct > 0 || potSettings.bufferPct > 0 || potSettings.savingsPct > 0)) {
       const alloc = allocateToPots(parseFloat(inv.amount)||0);
       if (alloc.taxAmt > 0 || alloc.bufferAmt > 0 || alloc.savingsAmt > 0) {
@@ -2696,14 +2709,17 @@ ${businessName}`
   ];
 
   return (
+    <ThemeContext.Provider value={C}>
     <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column",transition:"background 0.3s ease, color 0.3s ease"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
       <style>{`
         * { box-sizing: border-box; }
+        html, body { background: ${C.bg}; transition: background 0.3s ease; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
         input::placeholder { color: ${C.muted}; opacity: 0.7; }
+        select option { background: ${C.surface}; color: ${C.text}; }
         @keyframes fadeSlideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         .tab-content { animation: fadeSlideUp 0.2s ease; }
       `}</style>
@@ -2724,7 +2740,7 @@ ${businessName}`
           </div>
         )}
 
-        <div style={{flex:1,overflowY:"auto",paddingBottom:isMobile?80:0}}>
+        <div style={{flex:1,overflowY:"auto",paddingBottom:isMobile?80:0,background:C.bg,color:C.text,transition:"background 0.3s ease"}}>
           {isMobile&&(
             <div style={{position:"sticky",top:0,zIndex:100,background:C.bg,borderBottom:`1px solid ${C.border}`,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,backdropFilter:"blur(20px)"}}>
               <button onClick={()=>setSidebarOpen(true)} style={{background:C.card,border:`1px solid ${C.border}`,color:C.text,borderRadius:9,width:38,height:38,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>☰</button>
@@ -5272,5 +5288,6 @@ Enter amount to add:`)||"0");
         </Modal>
       )}
     </div>
+    </ThemeContext.Provider>
   );
 }
