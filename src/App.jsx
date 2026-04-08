@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import PayPage from "./PayPage";
 import ContactPage from "./ContactPage";
 import AboutPage from "./AboutPage";
@@ -1862,6 +1862,23 @@ export default function App() {
 
   useEffect(() => { if (session) { loadAll(); loadAccounts(); loadPots(); loadProposals(); loadTimeEntries(); loadFxRates(); loadFxHistory(); } }, [session]);
 
+  // Auto-refresh proposals when on proposals/pipeline tab to catch client responses
+  useEffect(() => {
+    if (!session || (tab !== "proposals" && tab !== "pipeline")) return;
+    const interval = setInterval(async () => {
+      const { data } = await supabase.from("proposals").select("*").eq("user_id", session.user.id).order("created_at", { ascending: false });
+      if (data) {
+        // Check if any status changed
+        const changed = data.some(p => {
+          const existing = proposals.find(x => x.id === p.id);
+          return existing && existing.status !== p.status;
+        });
+        if (changed) setProposals(data);
+      }
+    }, 15000); // check every 15 seconds
+    return () => clearInterval(interval);
+  }, [session, tab, proposals]);
+
   // Timer tick
   useEffect(() => {
     if (!timerRunning) return;
@@ -1958,6 +1975,12 @@ export default function App() {
     setProposalSending(proposal.id);
     const cur = proposal.currency || profile?.currency || "USD";
     const m = (n) => new Intl.NumberFormat("en-GB",{style:"currency",currency:cur}).format(n||0);
+    // Generate security token
+    const token = btoa(`${proposal.id}-ledgr`).replace(/=/g,"").slice(0,16);
+    const baseUrl = "https://phjybvphmlzghdebonzy.supabase.co/functions/v1/proposal-respond";
+    const acceptUrl = `${baseUrl}?id=${proposal.id}&action=accept&token=${token}`;
+    const declineUrl = `${baseUrl}?id=${proposal.id}&action=decline&token=${token}`;
+
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:'DM Sans',Arial,sans-serif;">
 <div style="max-width:580px;margin:0 auto;padding:24px 16px;">
@@ -1967,7 +1990,7 @@ export default function App() {
   </div>
   <div style="background:#ffffff;padding:32px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 14px 14px;">
     <p style="font-size:14px;color:#475569;margin:0 0 20px;">Hi ${proposal.client||"there"},</p>
-    <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;">Please find below a proposal from <strong>${profile?.name||profile?.business_name||"your freelancer"}</strong>. Review the details and reply to accept or request changes.</p>
+    <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;">You have received a proposal from <strong>${profile?.name||profile?.business_name||"your freelancer"}</strong>. Review the details below and click Accept or Decline.</p>
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:24px;">
       <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Proposal</div>
       <div style="font-size:20px;font-weight:800;color:#0f172a;margin-bottom:8px;">${proposal.title}</div>
@@ -1978,8 +2001,18 @@ export default function App() {
       </div>
       ${proposal.valid_until?`<div style="font-size:12px;color:#94a3b8;margin-top:8px;">Valid until: ${new Date(proposal.valid_until).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</div>`:""}
     </div>
-    <p style="font-size:14px;color:#475569;line-height:1.7;margin:0 0 24px;">To accept this proposal, simply reply to this email. Once accepted, an invoice will be raised.</p>
-    <p style="font-size:12px;color:#94a3b8;margin-top:24px;padding-top:16px;border-top:1px solid #f1f5f9;">Sent via Ledgr · ledgrapp.co.uk</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td style="padding-right:8px;">
+          <a href="${acceptUrl}" style="display:block;background:#4ADE80;color:#060A0F;text-align:center;padding:14px 20px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;font-family:'DM Sans',Arial,sans-serif;">✓ Accept Proposal</a>
+        </td>
+        <td style="padding-left:8px;">
+          <a href="${declineUrl}" style="display:block;background:#f1f5f9;color:#475569;text-align:center;padding:14px 20px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;border:1px solid #e2e8f0;font-family:'DM Sans',Arial,sans-serif;">✕ Decline</a>
+        </td>
+      </tr>
+    </table>
+    <p style="font-size:12px;color:#94a3b8;line-height:1.6;">These buttons can only be used once. If you have any questions, reply to this email or contact your freelancer directly.</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:16px;padding-top:16px;border-top:1px solid #f1f5f9;">Sent via Ledgr · ledgrapp.co.uk</p>
   </div>
 </div></body></html>`;
 
