@@ -3336,7 +3336,7 @@ ${businessName}`
               )}
 
               {tab==="accounts"&&(
-                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Connected Accounts" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
+                 !isPremium() ? <div style={{padding:"40px 0"}}><PremiumGate feature="Connected Accounts" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 <div>
                   <div style={{marginBottom:24}}>
                     <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Connected Accounts</h1>
