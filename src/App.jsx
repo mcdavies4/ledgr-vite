@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import PayPage from "./PayPage";
 import ContactPage from "./ContactPage";
 import AboutPage from "./AboutPage";
