@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import PayPage from "./PayPage";
 import ContactPage from "./ContactPage";
 import AboutPage from "./AboutPage";
@@ -1824,6 +1824,7 @@ export default function App() {
   const [stripeSuccess, setStripeSuccess] = useState(false);
   const [stripeConnectSuccess, setStripeConnectSuccess] = useState(false);
   const [stripeConnectError, setStripeConnectError] = useState("");
+  const [proposalResponse, setProposalResponse] = useState(null); // {status, msg}
   const [showAdmin, setShowAdmin] = useState(false);
   const isAdmin = session?.user?.email === ADMIN_EMAIL;
   useEffect(() => {
@@ -1841,6 +1842,10 @@ export default function App() {
     if (params.get("stripe_connect") === "error") {
       window.history.replaceState({}, "", window.location.pathname);
       setStripeConnectError(params.get("msg") || "Stripe connection failed.");
+    }
+    if (params.get("proposal_response")) {
+      window.history.replaceState({}, "", window.location.pathname);
+      setProposalResponse({ status: params.get("proposal_response"), msg: params.get("msg") || "" });
     }
   }, []);
 
@@ -2678,6 +2683,34 @@ ${businessName}`
       </div>
     </div>
   );
+  // ── Proposal response landing (client redirected here after clicking Accept/Decline) ──
+  if (proposalResponse) {
+    const isAccepted = proposalResponse.status === "accepted";
+    const isDeclined = proposalResponse.status === "declined";
+    const col = isAccepted ? "#4ADE80" : isDeclined ? "#F87171" : "#FBBF24";
+    return (
+      <div style={{minHeight:"100vh",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'DM Sans',Arial,sans-serif"}}>
+        <div style={{background:"#fff",borderRadius:24,padding:"48px 40px",maxWidth:480,width:"100%",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.08)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:32}}>
+            <div style={{width:28,height:28,background:"linear-gradient(135deg,#4ADE80,#16a34a)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,color:"#060A0F"}}>L</div>
+            <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>Ledgr</div>
+          </div>
+          <div style={{width:72,height:72,borderRadius:"50%",background:`${col}22`,border:`2px solid ${col}66`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 24px",fontSize:32,color:col,fontWeight:900}}>
+            {isAccepted ? "✓" : isDeclined ? "✕" : "!"}
+          </div>
+          <div style={{display:"inline-block",background:`${col}18`,color:isAccepted?"#16a34a":isDeclined?"#dc2626":"#d97706",border:`1px solid ${col}44`,borderRadius:20,padding:"5px 16px",fontSize:11,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:20}}>
+            {isAccepted ? "Accepted" : isDeclined ? "Declined" : "Notice"}
+          </div>
+          <h1 style={{fontSize:24,fontWeight:800,color:"#0f172a",marginBottom:14,fontFamily:"serif"}}>
+            {isAccepted ? "Proposal Accepted!" : isDeclined ? "Proposal Declined" : "Something went wrong"}
+          </h1>
+          <p style={{fontSize:14,color:"#475569",lineHeight:1.75,marginBottom:32}}>{proposalResponse.msg}</p>
+          <p style={{fontSize:11,color:"#94a3b8"}}>Powered by Ledgr · ledgrapp.co.uk</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!session) return <LandingOrAuth/>;
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
   if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
