@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import PayPage from "./PayPage";
 import ContactPage from "./ContactPage";
 import AboutPage from "./AboutPage";
@@ -594,8 +594,8 @@ function PaywallScreen({ session, onSignOut }) {
       <div style={{ width:"100%", maxWidth:460 }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ width:52, height:52, background:C.accent, borderRadius:14, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, color:"#0D0F14", marginBottom:16 }}>L</div>
-          <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:C.text, margin:"0 0 8px" }}>Ledgr Pro</h1>
-          <p style={{ color:C.muted, fontSize:15, margin:0 }}>Your free trial has ended. Choose a plan to continue.</p>
+          <h1 style={{ fontFamily:"'Playfair Display',serif", fontSize:28, color:C.text, margin:"0 0 8px" }}>Ledgr Premium</h1>
+          <p style={{ color:C.muted, fontSize:15, margin:0 }}>Upgrade to unlock all features. Free plan continues otherwise.</p>
         </div>
 
         {/* Plan toggle */}
@@ -630,12 +630,15 @@ function PaywallScreen({ session, onSignOut }) {
 
           <div style={{ padding:isMobile?"16px 20px":"24px 32px" }}>
             {[
-              "Unlimited invoices & PDF export",
-              "Stripe payment links (money direct to you)",
-              "Expense tracking & bank CSV import",
-              "Tax estimates for 18 countries",
-              "VAT returns & quarterly tracking",
-              "32 currencies · Client portal",
+              "AI Finance Assistant (ask Claude about your money)",
+              "Payment links — get paid directly via Stripe",
+              "Proposals with client Accept/Decline buttons",
+              "Time Tracker → convert hours to invoices",
+              "Income Pots — auto-set aside tax & savings",
+              "FX Rate Advisor (GBP/USD → NGN timing)",
+              "Goals, Pipeline, VAT returns, 18-country tax",
+              "Connected accounts — Wise, Flutterwave, Paystack",
+              "Receipt Scanner, Accountant Export Pack",
             ].map((f, i) => (
               <div key={i} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
                 <div style={{ width:18, height:18, borderRadius:"50%", background:C.accentDim, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
@@ -733,6 +736,30 @@ const DEMO_DATA = {
     { id:"a2", label:"Self Assessment", amount:3800, due_date:"2026-01-31", type:"business" },
   ],
 };
+
+// ── Premium Gate — shown when free user tries to access premium feature ──
+function PremiumGate({ feature, onUpgrade }) {
+  const C = useTheme();
+  return (
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"32px 24px",textAlign:"center",margin:"0 auto",maxWidth:420}}>
+      <div style={{width:52,height:52,background:"linear-gradient(135deg,#A78BFA,#7C3AED)",borderRadius:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,marginBottom:16}}>⚡</div>
+      <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:800,color:C.text,margin:"0 0 8px"}}>Premium Feature</h3>
+      <p style={{color:C.muted,fontSize:14,lineHeight:1.6,margin:"0 0 24px"}}><strong style={{color:C.text}}>{feature}</strong> is available on Ledgr Premium. Upgrade to unlock all features.</p>
+      <div style={{background:C.surface,borderRadius:12,padding:"14px 16px",marginBottom:20,textAlign:"left"}}>
+        {["AI Finance Assistant","Payment links & Stripe Connect","Proposals with client approval","Time Tracker","Income Pots","FX Rate Advisor","Goals & Pipeline","VAT returns","Connected accounts","Receipt Scanner","Unlimited invoices"].map((f,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <span style={{color:"#A78BFA",fontSize:11,fontWeight:700}}>✓</span>
+            <span style={{fontSize:12,color:C.textDim}}>{f}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={onUpgrade} style={{width:"100%",background:"linear-gradient(135deg,#A78BFA,#7C3AED)",border:"none",color:"#fff",padding:"13px",borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
+        Upgrade to Premium →
+      </button>
+      <div style={{fontSize:11,color:C.muted}}>$15/month · $120/year · Cancel anytime</div>
+    </div>
+  );
+}
 
 function DemoApp({ onExit }) {
   const isMobile = useIsMobile();
@@ -1321,8 +1348,8 @@ function AdminDashboard({ session, onExit }) {
   }, []);
 
   const fmtDate = d => d ? new Date(d).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" }) : "-";
-  const statusColor = s => s==="active"?"#4ADE80":s==="trialing"?"#FBBF24":s==="canceled"?"#F87171":"#8B95A8";
-  const statusBg = s => s==="active"?"#0a2018":s==="trialing"?"#1f1508":s==="canceled"?"#1f0808":C.card;
+  const statusColor = s => s==="active"?"#A78BFA":s==="trialing"?"#FBBF24":s==="canceled"?"#F87171":"#60A5FA";
+  const statusBg = s => s==="active"?"#1a0a2e":s==="trialing"?"#1f1508":s==="canceled"?"#1f0808":C.card;
 
   const filtered = (data?.users||[]).filter(u =>
     u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -1345,11 +1372,11 @@ function AdminDashboard({ session, onExit }) {
               <button onClick={()=>exportUsersCsv(data.users,"all")} style={{background:"#0d2018",border:"1px solid #4ADE8033",color:"#4ADE80",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
                 ↓ All Users
               </button>
-              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="trialing"||!u.subscription_status),"trial")} style={{background:"#1f1508",border:"1px solid #FBBF2433",color:"#FBBF24",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
-                ↓ Trial Users
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status!=="active"),"free")} style={{background:"#0f1e35",border:"1px solid #60A5FA33",color:"#60A5FA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                ↓ Free Users
               </button>
-              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="active"),"active")} style={{background:"#0a2018",border:"1px solid #4ADE8033",color:"#4ADE80",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
-                ↓ Paid Users
+              <button onClick={()=>exportUsersCsv(data.users.filter(u=>u.subscription_status==="active"),"premium")} style={{background:"#1a0a2e",border:"1px solid #A78BFA33",color:"#A78BFA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                ↓ Premium Users
               </button>
               {/* Brevo-ready exports */}
               <button onClick={()=>exportUsersCsv(data.users,"all",true)} style={{background:"#1a0a2e",border:"1px solid #A78BFA44",color:"#A78BFA",padding:"7px 14px",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}} title="Brevo-formatted CSV — import directly into Brevo contacts">
@@ -1384,8 +1411,8 @@ function AdminDashboard({ session, onExit }) {
               {[
                 {label:"Total Users", value:data.stats.total_users, color:"#F1F5F9"},
                 {label:"Active Subs", value:data.stats.active_subs, color:"#4ADE80"},
-                {label:"On Trial", value:data.stats.trialing, color:"#FBBF24"},
-                {label:"Trial Ended", value:(data.users||[]).filter(u=>u.subscription_status==="expired").length, color:"#F97316"},
+                {label:"Free Users", value:(data.users||[]).filter(u=>u.subscription_status!=="active").length, color:"#60A5FA"},
+                {label:"Premium", value:data.stats.active, color:"#A78BFA"},
                 {label:"Churned", value:data.stats.churned, color:"#F87171"},
                 {label:"MRR", value:`$${data.stats.mrr}`, color:"#4ADE80"},
               ].map((s,i) => (
@@ -1433,7 +1460,7 @@ function AdminDashboard({ session, onExit }) {
                   <div style={{fontSize:12,color:"#8B95A8"}}>{fmtDate(u.trial_ends_at)}</div>
                   <div>
                     <span style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:20,background:statusBg(u.subscription_status),color:statusColor(u.subscription_status),border:`1px solid ${statusColor(u.subscription_status)}33`,whiteSpace:"nowrap"}}>
-                      {u.subscription_status||"trialing"}
+                      {u.subscription_status==="active"?"premium":u.subscription_status||"free"}
                     </span>
                   </div>
                   <div style={{fontSize:13,fontWeight:600,color:"#8B95A8",textAlign:"center"}}>{u.invoices}</div>
@@ -1825,6 +1852,7 @@ export default function App() {
   const [stripeConnectSuccess, setStripeConnectSuccess] = useState(false);
   const [stripeConnectError, setStripeConnectError] = useState("");
   const [proposalResponse, setProposalResponse] = useState(null); // {status, msg}
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const isAdmin = session?.user?.email === ADMIN_EMAIL;
   useEffect(() => {
@@ -2636,17 +2664,16 @@ ${businessName}`
   };
 
   // ── Subscription gate ──
-  const isActive = () => {
-    if (!profile) return true; // still loading
+  // ── Freemium: everyone has free access, premium unlocks all features ──
+  const PREMIUM_EMAIL = "azubuikedavies@gmail.com";
+  const isPremium = () => {
+    if (!profile) return true; // still loading — don't block
+    if (session?.user?.email === PREMIUM_EMAIL) return true; // founder always premium
     const status = profile.subscription_status;
-    if (status === "active" || status === "past_due") return true;
-    if (status === "expired" || status === "canceled" || status === "unpaid") return false;
-    if (status === "trialing" || !status) {
-      if (!profile.trial_ends_at) return false;
-      return new Date(profile.trial_ends_at) > new Date();
-    }
-    return false;
+    return status === "active" || status === "past_due";
   };
+  // Keep isActive as alias for backwards compat — always true now (no paywall on login)
+  const isActive = () => true;
 
   const fInvoices = filter==="all"?invoices:invoices.filter(i=>i.type===filter);
   const fExpenses = filter==="all"?expenses:expenses.filter(e=>e.type===filter);
@@ -2713,7 +2740,7 @@ ${businessName}`
 
   if (!session) return <LandingOrAuth/>;
   if (isAdmin && showAdmin) return <AdminDashboard session={session} onExit={()=>setShowAdmin(false)}/>;
-  if (!loading && profile && !isActive()) return <PaywallScreen session={session} onSignOut={signOut}/>;
+  // No paywall on login — free tier is always accessible
 
   const TABS=[{id:"dashboard",label:"Dashboard"},{id:"invoices",label:"Invoices"},{id:"expenses",label:"Expenses"},{id:"alerts",label:"Alerts"},{id:"clients",label:"Clients"},{id:"accounts",label:"Accounts"},{id:"bank",label:"Bank"},{id:"charts",label:"Charts"},{id:"tax",label:"Tax"},{id:"vat",label:"VAT"},{id:"pots",label:"💰 Pots"},{id:"proposals",label:"Proposals"},{id:"time",label:"⏱ Time"},{id:"pipeline",label:"🔄 Pipeline"},{id:"goals",label:"🎯 Goals"},{id:"ai",label:"✦ AI"}];
   const goTab=(id)=>{setTab(id);setSidebarOpen(false);};
@@ -2748,7 +2775,10 @@ ${businessName}`
         ))}
       </div>
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,marginTop:16}}>
-        {profile?.subscription_status==="active"&&<div style={{fontSize:11,color:C.accent,fontWeight:700,padding:"6px 12px",marginBottom:8,background:C.accentDim,borderRadius:8,display:"flex",alignItems:"center",gap:6}}><span>✓</span> Pro</div>}
+        {isPremium()
+          ? <div style={{fontSize:11,color:"#A78BFA",fontWeight:700,padding:"6px 12px",marginBottom:8,background:"rgba(167,139,250,0.12)",borderRadius:8,display:"flex",alignItems:"center",gap:6}}>⚡ Premium</div>
+          : <button onClick={()=>setShowUpgradeModal(true)} style={{width:"100%",fontSize:11,color:"#A78BFA",fontWeight:700,padding:"6px 12px",marginBottom:8,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.25)",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:6}}>⚡ Upgrade to Premium</button>
+        }
         <button onClick={()=>{setEditPro(profile||{});setModal("profile");setSidebarOpen(false);}} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:"transparent",color:C.textDim,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:2,transition:"all 0.15s"}}>⚙ Profile</button>
         {isAdmin&&<button onClick={()=>setShowAdmin(true)} style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",background:C.accentDim,color:C.accent,fontSize:12,fontFamily:"'DM Sans',sans-serif",marginBottom:4,fontWeight:700}}>◈ Admin</button>}
         {/* Theme toggle */}
@@ -2789,7 +2819,7 @@ ${businessName}`
         .tab-content { animation: fadeSlideUp 0.2s ease; }
       `}</style>
 
-      {profile && <TrialBanner profile={profile} session={session}/>}
+      {/* Trial banner removed — freemium model */}
 
       <div style={{display:"flex",flex:1,minHeight:0}}>
         {!isMobile&&(
@@ -2959,7 +2989,10 @@ ${businessName}`
                             const w = window.open("","_blank"); w.document.write(html); w.document.close();
                           }} style={{padding:"8px 12px",fontSize:12,color:"#A78BFA",border:"1px solid #A78BFA44",flex:1}}>👁 Preview</Btn>
                           {inv.status!=="paid"&&<Btn onClick={()=>markPaid(inv.id)} style={{padding:"8px 14px",fontSize:12,flex:1}}>Mark Paid</Btn>}
-                          {inv.status!=="paid"&&!profile?.stripe_account_id&&(
+                          {inv.status!=="paid"&&!isPremium()&&(
+                            <Btn variant="secondary" onClick={()=>setShowUpgradeModal(true)} style={{padding:"8px 14px",fontSize:12,color:"#A78BFA",border:"1px solid #A78BFA44",flex:1}}>⚡ Upgrade</Btn>
+                          )}
+                          {inv.status!=="paid"&&isPremium()&&!profile?.stripe_account_id&&(
                             <Btn variant="secondary" onClick={()=>setModal("profile")} style={{padding:"8px 14px",fontSize:12,flex:1,color:"#FBBF24",border:"1px solid #FBBF2444"}} title="Connect Stripe in Profile to enable payment links">
                               ⚡ Connect Stripe
                             </Btn>
@@ -3303,6 +3336,7 @@ ${businessName}`
               )}
 
               {tab==="accounts"&&(
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Connected Accounts" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 <div>
                   <div style={{marginBottom:24}}>
                     <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Connected Accounts</h1>
@@ -3808,6 +3842,7 @@ ${businessName}`
 
               {/* ── VAT Return Tab ── */}
               {tab==="vat"&&(()=>{
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="VAT Returns" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 if (!profile?.vat_registered) return (
                   <div style={{textAlign:"center",padding:"60px 20px",color:C.muted}}>
                     <div style={{fontSize:40,marginBottom:16}}>🧾</div>
@@ -3972,6 +4007,7 @@ ${businessName}`
 
               {/* ── INCOME POTS TAB ── */}
               {tab==="pots"&&(()=>{
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Income Pots" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 const cur = profile?.currency||"USD";
                 const totalPots = (pots.tax||0)+(pots.buffer||0)+(pots.savings||0);
                 const inputStyle = {width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"};
@@ -4053,6 +4089,7 @@ Enter amount to add:`)||"0");
 
               {/* ── PROPOSALS TAB ── */}
               {tab==="proposals"&&(
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Proposals" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,gap:12}}>
                     <div>
@@ -4128,6 +4165,7 @@ Enter amount to add:`)||"0");
 
               {/* ── TIME TRACKER TAB ── */}
               {tab==="time"&&(()=>{
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Time Tracker & FX Advisor" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 const cur = profile?.currency||"USD";
                 const elapsed = timerRunning ? Math.floor((Date.now()-timerStart)/1000) : timerElapsed;
                 const hh = String(Math.floor(elapsed/3600)).padStart(2,"0");
@@ -4351,6 +4389,7 @@ Enter amount to add:`)||"0");
 
               {/* ── PIPELINE TAB ── */}
               {tab==="pipeline"&&(()=>{
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Pipeline" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 const cur = profile?.currency||"USD";
                 const now = new Date();
                 const stages = [
@@ -4417,6 +4456,7 @@ Enter amount to add:`)||"0");
 
               {/* ── GOALS TAB ── */}
               {tab==="goals"&&(()=>{
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Goals & Insights" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 const cur = profile?.currency||"USD";
                 const now = new Date();
                 const thisMonth = now.toISOString().slice(0,7);
@@ -4617,6 +4657,7 @@ Enter amount to add:`)||"0");
               })()}
 
               {tab==="ai"&&(()=>{
+                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="AI Assistant" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
                 const now = new Date();
                 const thisMonth = now.toISOString().slice(0,7);
                 const mthInvoices = invoices.filter(inv=>inv.date?.startsWith(thisMonth));
@@ -4696,6 +4737,25 @@ Enter amount to add:`)||"0");
         </div>
       )}
 
+      {/* Upgrade modal */}
+      {showUpgradeModal&&(
+        <Modal title="Upgrade to Premium" onClose={()=>setShowUpgradeModal(false)}>
+          <div style={{textAlign:"center",paddingBottom:8}}>
+            <div style={{width:52,height:52,background:"linear-gradient(135deg,#A78BFA,#7C3AED)",borderRadius:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,marginBottom:16}}>⚡</div>
+            <p style={{color:C.muted,fontSize:14,lineHeight:1.6,margin:"0 0 20px"}}>Unlock all Ledgr features including AI, payment links, proposals, time tracker, income pots, FX advisor and more.</p>
+            <div style={{display:"flex",gap:8,marginBottom:16}}>
+              {[{id:"monthly",label:"Monthly",price:"$15/mo"},{id:"annual",label:"Annual",price:"$120/yr",badge:"SAVE $60"}].map(p=>(
+                <button key={p.id} onClick={async()=>{setShowUpgradeModal(false);try{await startCheckout(session.user.id,session.user.email,p.id==="annual"?PRICE_ANNUAL:PRICE_MONTHLY);}catch(e){alert(e.message);}}} style={{flex:1,padding:"14px 8px",borderRadius:10,border:`1px solid ${C.border}`,cursor:"pointer",background:C.surface,fontFamily:"'DM Sans',sans-serif",position:"relative"}}>
+                  {p.badge&&<span style={{position:"absolute",top:-8,left:"50%",transform:"translateX(-50%)",background:"#A78BFA",color:"#fff",fontSize:8,fontWeight:800,padding:"2px 8px",borderRadius:8,whiteSpace:"nowrap"}}>{p.badge}</span>}
+                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:2}}>{p.label}</div>
+                  <div style={{fontSize:16,fontWeight:800,color:"#A78BFA",fontFamily:"'Playfair Display',serif"}}>{p.price}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{fontSize:11,color:C.muted}}>Secured by Stripe · Cancel anytime</div>
+          </div>
+        </Modal>
+      )}
       {depositInvId&&(()=>{
         const inv = invoices.find(i=>i.id===depositInvId);
         if (!inv) return null;
