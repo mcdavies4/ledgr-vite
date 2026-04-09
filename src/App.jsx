@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import PayPage from "./PayPage";
 import ContactPage from "./ContactPage";
 import AboutPage from "./AboutPage";
@@ -3336,7 +3336,7 @@ ${businessName}`
               )}
 
               {tab==="accounts"&&(
-                 !isPremium() return <div style={{padding:"40px 0"}}><PremiumGate feature="Connected Accounts" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
+                !isPremium() ? <div style={{padding:"40px 0"}}><PremiumGate feature="Connected Accounts" onUpgrade={()=>setShowUpgradeModal(true)}/></div> :
                 <div>
                   <div style={{marginBottom:24}}>
                     <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?22:30,margin:"0 0 4px",fontWeight:800,letterSpacing:"-0.02em"}}>Connected Accounts</h1>
@@ -4089,7 +4089,8 @@ Enter amount to add:`)||"0");
 
               {/* ── PROPOSALS TAB ── */}
               {tab==="proposals"&&(
-                if (!isPremium()) return <div style={{padding:"40px 0"}}><PremiumGate feature="Proposals" onUpgrade={()=>setShowUpgradeModal(true)}/></div>;
+                !isPremium() ? <div style={{padding:"40px 0"}}><PremiumGate feature="Proposals" onUpgrade={()=>setShowUpgradeModal(true)}/></div> :
+                <div>
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,gap:12}}>
                     <div>
@@ -4160,7 +4161,6 @@ Enter amount to add:`)||"0");
                       );
                     })}
                   </div>
-                </div>
               )}
 
               {/* ── TIME TRACKER TAB ── */}
