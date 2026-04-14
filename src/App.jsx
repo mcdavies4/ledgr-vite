@@ -904,8 +904,8 @@ function DemoApp({ onExit }) {
         {/* CTA */}
         <div style={{marginTop:40,background:"linear-gradient(135deg,#0d2018,#0a1a0f)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:16,padding:"28px 24px",textAlign:"center"}}>
           <div style={{fontFamily:"'Playfair Display',serif",fontSize:isMobile?20:24,fontWeight:800,marginBottom:8}}>Ready to use Ledgr for real?</div>
-          <p style={{color:C.muted,fontSize:14,marginBottom:20}}>14-day free trial · No credit card · $15/month after</p>
-          <button onClick={onExit} style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"13px 32px",borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>Start free trial →</button>
+          <p style={{color:C.muted,fontSize:14,marginBottom:20}}>Free forever on core features · $15/month for Premium</p>
+          <button onClick={onExit} style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"13px 32px",borderRadius:10,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>Start for free →</button>
         </div>
       </div>
 
@@ -938,7 +938,7 @@ function LandingPage({ onGetStarted, onTryDemo }) {
   const [activeFaq, setActiveFaq] = useState(null);
   const [billing, setBilling] = useState("annual"); // default annual
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#060A0F",color:"#F1F5F9",minHeight:"100vh",overflowX:"hidden"}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:C.bg,color:C.text,minHeight:"100vh",overflowX:"hidden"}}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
       <style>{`
         @keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
@@ -1023,13 +1023,13 @@ function LandingPage({ onGetStarted, onTryDemo }) {
           {/* CTA buttons */}
           <div className="r5" style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap",marginBottom:20}}>
             <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"15px 36px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 8px 36px rgba(74,222,128,0.3)"}}>
-              Start free — 14 days, no card
+              Start for free — no card needed
             </button>
             <button onClick={()=>onTryDemo()} className="sec-btn" style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#8B95A8",padding:"15px 28px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
               Try demo →
             </button>
           </div>
-          <p style={{color:"#3D4A5C",fontSize:12,margin:0}}>No credit card · Cancel anytime · £15/mo after trial</p>
+          <p style={{color:"#3D4A5C",fontSize:12,margin:0}}>Free forever · Upgrade to Premium for £15/mo</p>
         </div>
       </div>
 
@@ -1130,7 +1130,7 @@ function LandingPage({ onGetStarted, onTryDemo }) {
             <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 16px",letterSpacing:"-0.02em",lineHeight:1.15}}>Your finances,<br/>any country.</h2>
             <p style={{color:"#4B5A6A",fontSize:14,lineHeight:1.8,marginBottom:28}}>Most finance tools are built for one country. Ledgr works wherever you are — with accurate tax calculations, the right currency formatting, and VAT support for European freelancers.</p>
             <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"12px 28px",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 6px 24px rgba(74,222,128,0.25)"}}>
-              Try free for 14 days →
+              Get started free →
             </button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -1154,61 +1154,70 @@ function LandingPage({ onGetStarted, onTryDemo }) {
       </div>
 
       {/* ── Pricing ── */}
-      <div id="pricing" style={{maxWidth:480,margin:"0 auto 100px",padding:"0 24px",textAlign:"center"}}>
-        <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:16}}>Pricing</div>
-        <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 32px",letterSpacing:"-0.02em"}}>One plan.<br/>Everything included.</h2>
-
-        {/* Billing toggle */}
-        <div style={{display:"flex",gap:4,marginBottom:24,background:"rgba(255,255,255,0.03)",borderRadius:12,padding:4,border:"1px solid rgba(255,255,255,0.06)",maxWidth:280,margin:"0 auto 24px"}}>
-          {[
-            {id:"monthly",label:"Monthly"},
-            {id:"annual", label:"Annual"},
-          ].map(b=>(
-            <button key={b.id} onClick={()=>setBilling(b.id)} style={{
-              flex:1,padding:"8px 12px",borderRadius:9,border:"none",cursor:"pointer",
-              background:billing===b.id?"#0C1118":"transparent",
-              color:billing===b.id?"#F1F5F9":"#3D4A5C",
-              fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif",
-              boxShadow:billing===b.id?"0 0 0 1px rgba(74,222,128,0.2)":"none",
-              transition:"all 0.15s",
-            }}>{b.label}{b.id==="annual"&&<span style={{fontSize:9,fontWeight:800,background:billing==="annual"?"#4ADE80":"#1a2a1a",color:billing==="annual"?"#060A0F":"#4ADE80",borderRadius:6,padding:"1px 5px",marginLeft:6,letterSpacing:"0.06em"}}>-33%</span>}</button>
-          ))}
+      <div id="pricing" style={{maxWidth:860,margin:"0 auto 100px",padding:"0 24px"}}>
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:16}}>Pricing</div>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(26px,3.5vw,40px)",fontWeight:800,margin:"0 0 12px",letterSpacing:"-0.02em"}}>Start free.<br/>Upgrade when you need more.</h2>
+          <p style={{color:"#6B7A8D",fontSize:15,margin:0}}>No credit card needed to get started.</p>
         </div>
 
-        <div style={{background:"#0C1118",border:"1px solid rgba(74,222,128,0.15)",borderRadius:20,overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,0.4)"}}>
-          <div style={{background:"linear-gradient(160deg,#0d2018,#0a1a0f)",borderBottom:"1px solid rgba(74,222,128,0.1)",padding:"36px 32px",textAlign:"center",position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:"-30%",left:"50%",transform:"translateX(-50%)",width:200,height:200,background:"radial-gradient(ellipse,rgba(74,222,128,0.12) 0%,transparent 70%)"}}/>
-            <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12}}>Pro Plan</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:64,fontWeight:900,color:"#4ADE80",lineHeight:1,position:"relative"}}>
-              {billing==="annual" ? "$120" : "$15"}
+        {/* Two column: Free + Premium */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+
+          {/* Free Plan */}
+          <div style={{background:"#0C1118",border:"1px solid rgba(255,255,255,0.06)",borderRadius:20,overflow:"hidden"}}>
+            <div style={{padding:"28px 28px 20px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#6B7A8D",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:10}}>Free</div>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:48,fontWeight:900,color:"#F1F5F9",lineHeight:1}}>$0</div>
+              <div style={{color:"#3D4A5C",fontSize:13,marginTop:6}}>forever · no card needed</div>
             </div>
-            <div style={{color:"#3D4A5C",fontSize:13,marginTop:8}}>
-              {billing==="annual" ? "per year — save $60 vs monthly" : "per month · cancel anytime"}
+            <div style={{padding:"20px 28px 28px"}}>
+              {["Invoices & PDF export","Expense tracking","Client management","Basic tax estimates (18 countries)","Dashboard & charts","32 currencies"].map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
+                  <span style={{color:"#4ADE80",fontSize:11,fontWeight:800,width:16,flexShrink:0,marginTop:2}}>✓</span>
+                  <span style={{fontSize:13,color:"#6B7A8D",lineHeight:1.5}}>{f}</span>
+                </div>
+              ))}
+              <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{width:"100%",background:"transparent",border:"1px solid rgba(255,255,255,0.12)",color:"#F1F5F9",padding:"13px",borderRadius:12,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"'DM Sans',sans-serif",marginTop:16}}>
+                Get started free →
+              </button>
             </div>
-            {billing==="annual"&&<div style={{marginTop:10,display:"inline-block",background:"rgba(74,222,128,0.1)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:8,padding:"3px 10px",fontSize:11,color:"#4ADE80",fontWeight:600}}>That's just $10/month</div>}
           </div>
-          <div style={{padding:"28px 32px"}}>
-            {[
-              "14-day free trial — no card required",
-              "Unlimited invoices & PDF export",
-              "Stripe payment links (direct to you)",
-              "Client portal with view tracking",
-              "Expense tracking & bank CSV import",
-              "Recurring invoices on autopilot",
-              "Tax estimates for 18 countries",
-              "VAT returns & quarterly tracking",
-              "32 currencies with correct formatting",
-              "Cash flow charts & client analytics",
-            ].map((f,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:11}}>
-                <span style={{color:"#4ADE80",fontSize:11,fontWeight:800,width:16,flexShrink:0,marginTop:2}}>✓</span>
-                <span style={{fontSize:13,color:"#6B7A8D",lineHeight:1.5}}>{f}</span>
+
+          {/* Premium Plan */}
+          <div style={{background:"#0C1118",border:"1px solid rgba(74,222,128,0.25)",borderRadius:20,overflow:"hidden",boxShadow:"0 0 0 1px rgba(74,222,128,0.1), 0 24px 64px rgba(0,0,0,0.4)",position:"relative"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"linear-gradient(90deg,#4ADE80,#22d3ee)"}}/>
+            <div style={{padding:"28px 28px 20px",borderBottom:"1px solid rgba(74,222,128,0.1)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:"0.1em",textTransform:"uppercase"}}>Premium</div>
+                <span style={{background:"rgba(74,222,128,0.1)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:6,padding:"1px 8px",fontSize:9,color:"#4ADE80",fontWeight:700,letterSpacing:"0.06em"}}>BEST VALUE</span>
               </div>
-            ))}
-            <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{width:"100%",background:"#4ADE80",border:"none",color:"#060A0F",padding:"15px",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginTop:12,boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
-              Start 14-day free trial →
-            </button>
-            <p style={{color:"#2A3A4A",fontSize:11,marginTop:12,textAlign:"center"}}>No card needed · Choose plan after trial</p>
+              {/* Billing toggle */}
+              <div style={{display:"flex",gap:4,marginBottom:14,background:"rgba(255,255,255,0.03)",borderRadius:10,padding:3,border:"1px solid rgba(255,255,255,0.06)",maxWidth:200}}>
+                {[{id:"monthly",label:"Monthly"},{id:"annual",label:"Annual -33%"}].map(b=>(
+                  <button key={b.id} onClick={()=>setBilling(b.id)} style={{flex:1,padding:"5px 8px",borderRadius:7,border:"none",cursor:"pointer",background:billing===b.id?"#0F1A12":"transparent",color:billing===b.id?"#4ADE80":"#3D4A5C",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{b.label}</button>
+                ))}
+              </div>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:48,fontWeight:900,color:"#4ADE80",lineHeight:1}}>
+                {billing==="annual" ? "$120" : "$15"}
+              </div>
+              <div style={{color:"#3D4A5C",fontSize:13,marginTop:6}}>
+                {billing==="annual" ? "per year — that's $10/month" : "per month · cancel anytime"}
+              </div>
+            </div>
+            <div style={{padding:"20px 28px 28px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#4ADE80",marginBottom:12,textTransform:"uppercase",letterSpacing:"0.06em"}}>Everything in Free, plus:</div>
+              {["AI Finance Assistant (powered by Claude)","Payment links — get paid via Stripe","Proposals with client Accept/Decline","Time Tracker → convert hours to invoices","Income Pots — auto-split tax & savings","FX Rate Advisor (GBP/USD → NGN timing)","Goals, Pipeline & Runway calculator","VAT returns & MTD-ready export","Connected accounts (Wise, Flutterwave, Paystack)","Receipt Scanner — photo to expense in 3s","Accountant Export Pack"].map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:9}}>
+                  <span style={{color:"#4ADE80",fontSize:11,fontWeight:800,width:16,flexShrink:0,marginTop:2}}>⚡</span>
+                  <span style={{fontSize:13,color:"#8B95A8",lineHeight:1.5}}>{f}</span>
+                </div>
+              ))}
+              <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{width:"100%",background:"#4ADE80",border:"none",color:"#060A0F",padding:"14px",borderRadius:12,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginTop:16,boxShadow:"0 8px 32px rgba(74,222,128,0.25)"}}>
+                Get started free →
+              </button>
+              <p style={{color:"#2A3A4A",fontSize:11,marginTop:10,textAlign:"center"}}>Start free · Upgrade anytime · Cancel anytime</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1220,7 +1229,7 @@ function LandingPage({ onGetStarted, onTryDemo }) {
           <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(24px,3vw,36px)",fontWeight:800,margin:0,letterSpacing:"-0.02em"}}>Common questions</h2>
         </div>
         {[
-          {q:"Is there really no credit card required for the trial?",a:"Correct — start your 14-day free trial with just an email address. We only ask for payment details if you decide to continue after the trial ends."},
+          {q:"What is included in the free plan?",a:"The free plan includes invoicing, expenses, clients and basic tax — forever, no card needed. Upgrade to Premium ($15/month) to unlock AI, payment links, proposals, time tracker, income pots, FX advisor, VAT returns and more."},
           {q:"Which countries are supported for tax calculations?",a:"18 countries including UK, USA, Germany, France, Netherlands, Spain, Sweden, Switzerland, Canada, Australia, Nigeria, South Africa, Kenya, Ghana, India, Singapore, Japan and Malaysia. More added regularly."},
           {q:"How does VAT tracking work?",a:"Enable VAT registration in your profile, add your VAT number and default rate. Invoices will show subtotal + VAT breakdown. The VAT Return tab tracks output VAT (charged to clients) vs input VAT (paid on expenses) and produces a UK MTD-compatible summary you can file directly or send to your accountant."},
           {q:"Can I get paid directly through Ledgr?",a:"Yes — connect your Stripe account in Profile settings and every invoice gets a payment link. When clients pay, the money goes directly to your Stripe account. Ledgr never touches your funds."},
@@ -1252,7 +1261,7 @@ function LandingPage({ onGetStarted, onTryDemo }) {
           <button onClick={()=>onGetStarted("signup")} className="cta-btn" style={{background:"#4ADE80",border:"none",color:"#060A0F",padding:"16px 44px",borderRadius:14,cursor:"pointer",fontSize:16,fontWeight:700,fontFamily:"'DM Sans',sans-serif",boxShadow:"0 12px 48px rgba(74,222,128,0.3)"}}>
             Start free — no card needed →
           </button>
-          <p style={{color:"#1E2A38",fontSize:12,marginTop:16}}>14-day trial · £15/mo after · Cancel anytime</p>
+          <p style={{color:"#1E2A38",fontSize:12,marginTop:16}}>Free plan available · Premium from £15/mo</p>
         </div>
       </div>
 
@@ -1541,14 +1550,14 @@ function AuthScreen({ initialMode="login" }) {
         </div>
         <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:20, padding:"36px 32px", boxShadow:"0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02)" }}>
           <h2 style={{ color:C.text, fontSize:18, fontWeight:700, margin:"0 0 24px", fontFamily:"'Playfair Display',serif" }}>
-            {mode==="login"?"Welcome back":mode==="signup"?"Start your 14-day free trial":"Reset password"}
+            {mode==="login"?"Welcome back":mode==="signup"?"Create your free account":"Reset password"}
           </h2>
           <TextInput label="Email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" onKeyDown={e=>e.key==="Enter"&&handle()}/>
           {mode!=="reset" && <TextInput label="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="min 6 characters" onKeyDown={e=>e.key==="Enter"&&handle()}/>}
           {error && <div style={{ background:C.dangerDim, border:`1px solid ${C.danger}44`, borderRadius:8, padding:"10px 14px", color:C.danger, fontSize:13, marginBottom:16 }}>{error}</div>}
           {message && <div style={{ background:C.accentDim, border:`1px solid ${C.accent}44`, borderRadius:8, padding:"10px 14px", color:C.accent, fontSize:13, marginBottom:16 }}>{message}</div>}
           <Btn onClick={handle} disabled={loading} style={{ width:"100%", marginBottom:12 }}>
-            {loading?"Please wait...":mode==="login"?"Log in":mode==="signup"?"Start free trial":"Send reset email"}
+            {loading?"Please wait...":mode==="login"?"Log in":mode==="signup"?"Create free account":"Send reset email"}
           </Btn>
           {mode!=="reset" && (
             <>
@@ -1563,13 +1572,13 @@ function AuthScreen({ initialMode="login" }) {
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"center" }}>
             {mode==="login" && <>
-              <button onClick={()=>{setMode("signup");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.accent, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>No account? Start 14-day free trial</button>
+              <button onClick={()=>{setMode("signup");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.accent, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>No account? Sign up free</button>
               <button onClick={()=>{setMode("reset");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>Forgot password?</button>
             </>}
             {mode!=="login" && <button onClick={()=>{setMode("login");setError("");setMessage("");}} style={{ background:"none", border:"none", color:C.accent, cursor:"pointer", fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>Back to log in</button>}
           </div>
         </div>
-        {mode==="signup" && <p style={{ color:C.muted, fontSize:12, textAlign:"center", marginTop:12 }}>14 days free · then $15/month · cancel anytime</p>}
+        {mode==="signup" && <p style={{ color:C.muted, fontSize:12, textAlign:"center", marginTop:12 }}>Free forever on core features · Premium $15/month</p>}
       </div>
     </div>
   );
@@ -4044,19 +4053,14 @@ ${businessName}`
                           <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:800,color:pot.color,marginBottom:12}}>{money(pots[pot.key]||0,cur)}</div>
                           <div style={{display:"flex",gap:6}}>
                             <button onClick={()=>{
-                              const withdraw = parseFloat(prompt(`Withdraw from ${pot.label}?
-Current balance: ${money(pots[pot.key]||0,cur)}
-
-Enter amount to withdraw:`)||"0");
+                              const withdraw = parseFloat(prompt(`Withdraw from ${pot.label}? Balance: ${money(pots[pot.key]||0,cur)}. Enter amount:`)||"0");
                               if(withdraw>0&&withdraw<=(pots[pot.key]||0)){
                                 const newPots={...pots,[pot.key]:parseFloat(((pots[pot.key]||0)-withdraw).toFixed(2))};
                                 savePots(newPots,null);
                               }
                             }} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,color:C.muted,borderRadius:8,padding:"7px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Withdraw</button>
                             <button onClick={()=>{
-                              const add = parseFloat(prompt(`Add to ${pot.label}:
-
-Enter amount to add:`)||"0");
+                              const add = parseFloat(prompt(`Add to ${pot.label}: Enter amount to add:`)||"0");
                               if(add>0){const newPots={...pots,[pot.key]:parseFloat(((pots[pot.key]||0)+add).toFixed(2))};savePots(newPots,null);}
                             }} style={{flex:1,background:`${pot.color}22`,border:`1px solid ${pot.color}44`,color:pot.color,borderRadius:8,padding:"7px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Add</button>
                           </div>
@@ -4090,7 +4094,6 @@ Enter amount to add:`)||"0");
               {/* ── PROPOSALS TAB ── */}
               {tab==="proposals"&&(
                 !isPremium() ? <div style={{padding:"40px 0"}}><PremiumGate feature="Proposals" onUpgrade={()=>setShowUpgradeModal(true)}/></div> :
-                <div>
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,gap:12}}>
                     <div>
@@ -4161,6 +4164,7 @@ Enter amount to add:`)||"0");
                       );
                     })}
                   </div>
+                </div>
               )}
 
               {/* ── TIME TRACKER TAB ── */}
